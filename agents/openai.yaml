@@ -1,0 +1,4 @@
+interface:
+  display_name: "Java Code Review"
+  short_description: "以本地 Java 規範審查與產生程式碼"
+  default_prompt: "Use $java-code-review to review this Java change against the local Java rules."
