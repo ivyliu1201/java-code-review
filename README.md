@@ -1,4 +1,4 @@
-# Java Code Review Skill
+# Java 程式審查 Skill
 
 這是一個給 Codex 使用的 Java 程式審查 skill。它會依照本地 Java 規範進行 code review、命名與常數檢查、重構建議，以及正式 production Java 程式碼產生。
 
@@ -49,7 +49,7 @@ Use $java-code-review to review this Java change against the local Java rules.
 請用 java-code-review 依本地 Java 規範審查這次修改。
 ```
 
-## Review 模式
+## 審查模式
 
 ### Compact Review Mode
 
@@ -80,7 +80,7 @@ Use $java-code-review to review this Java change against the local Java rules.
 - Progress
 - Continuation prompt
 
-## Severity
+## 嚴重度
 
 - `Critical`：明確的正確性、安全性、資料損壞、交易流程錯誤，或高機率 production 事故風險。
 - `Major`：明確規則違反、邏輯脆弱、可維護性重大缺陷，或高風險但未必立即造成事故的問題。
