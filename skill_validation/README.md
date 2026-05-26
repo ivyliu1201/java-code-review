@@ -16,6 +16,8 @@
 
 ```text
 skill_validation/
+├─ BENCHMARK_DESIGN.md
+├─ benchmark_catalog.json
 ├─ README.md
 ├─ validate_skill.py
 ├─ run_golden_tests.py
@@ -146,3 +148,39 @@ benchmark 結果建議拆成三組訊號，不要只看單一總 pass：
   - 是否只評論應審查的範圍；diff case 代表不越界，大型專案 case 代表有清楚交代審查範圍。
 - `format / workflow`
   - 單檔與 diff case 主要看中文表格與必要段落是否穩定；large-codebase case 主要看 inventory、batch、ledger、progress、continuation。
+
+## Case 設計來源
+
+- [BENCHMARK_DESIGN.md](/C:/Users/fanny/.codex/skills/java-code-review/skill_validation/BENCHMARK_DESIGN.md:1)
+  - 給人閱讀的 benchmark 分層與案例設計原則。
+- [benchmark_catalog.json](/C:/Users/fanny/.codex/skills/java-code-review/skill_validation/benchmark_catalog.json:1)
+  - 給後續腳本使用的結構化 case catalog。
+
+目前已經改成由 catalog 驅動的可執行案例：
+
+- `single-file baseline`：`security-01`、`null-safety-01`、`transaction-01`、`performance-01`、`maintainability-01`
+- `single-file holdout`：`security-holdout-01`、`null-safety-holdout-01`、`transaction-holdout-01`、`performance-holdout-01`、`maintainability-holdout-01`
+- `diff / PR`：`security-diff-01`、`null-safety-diff-01`、`transaction-diff-01`、`performance-diff-01`、`maintainability-diff-01`
+- `large-codebase`：`large-codebase-01`
+
+仍保留少數「只有 catalog 設計、尚未提供 fixture」的概念案例，例如 `sf-state-transition-01`、`sf-time-boundary-01`、`diff-cache-scope-01`、`lg-cross-module-risk-01`。這些案例不會影響目前可執行腳本，但要等真正補 fixture 後才會進入 runnable benchmark。
+
+## 建議的第一輪 runtime 執行順序
+
+若要開始真正執行 skill，而不是只跑 static wiring，建議按這個順序 rollout：
+
+1. `single-file baseline`
+   - 先確認核心規則命中是否穩定。
+2. `single-file holdout`
+   - 再看 rule 是否有基本泛化能力。
+3. `diff / PR`
+   - 確認 scope 控制與中文表格 finding 是否穩定。
+4. `large-codebase`
+   - 最後才驗證 inventory、batch、ledger、progress、continuation。
+
+第一輪 runtime 不建議一次全跑所有層級。比較好的做法是每層先挑 1 到 2 個 case，確認：
+
+- 有實際 stdout
+- finding 使用中文表格
+- `quality / scope / workflow` 三種訊號沒有被混成單一總 pass
+- summary 沒有把 static 結果誤當 runtime 結果

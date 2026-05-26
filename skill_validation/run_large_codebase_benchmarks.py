@@ -10,15 +10,21 @@ from pathlib import Path
 from typing import Any
 
 from run_golden_tests import (
+    annotate_cases_with_catalog,
+    apply_catalog_fixtures,
+    build_benchmark_case_index,
     build_runtime_command,
     build_source_manifest,
     detect_runtime_command,
+    get_benchmark_layer,
+    load_benchmark_catalog,
     normalize_runtime_text,
     parse_actual_findings,
     parse_rule_sections,
     read_text_with_fallback,
     relative_to_root,
     resolve_skill_root,
+    summarize_catalog_alignment,
     write_json,
     write_jsonl,
 )
@@ -30,6 +36,16 @@ REQUIRED_SOURCES = [
     "references/review-workflow.md",
     "references/java-rules.md",
 ]
+LARGE_CATALOG_CASE_MAP = {
+    "large-codebase-01": [
+        "lg-inventory-honesty-01",
+        "lg-batch-planning-01",
+        "lg-ledger-progress-01",
+        "lg-hotspot-priority-01",
+        "lg-pending-disclosure-01",
+        "lg-continuation-prompt-01",
+    ]
+}
 
 
 def parse_args() -> argparse.Namespace:
@@ -331,6 +347,9 @@ def run(args: argparse.Namespace) -> int:
     case_workspaces_dir.mkdir(parents=True, exist_ok=True)
 
     source_manifest, source_texts, manifest_notes = build_source_manifest(skill_root)
+    benchmark_catalog, catalog_notes = load_benchmark_catalog(skill_root)
+    benchmark_layer = get_benchmark_layer(benchmark_catalog, "large_codebase")
+    benchmark_case_index = build_benchmark_case_index(benchmark_layer)
     java_rules_text = source_texts.get("references/java-rules.md", "")
     rule_sections = parse_rule_sections(java_rules_text) if java_rules_text else {}
 
@@ -353,6 +372,8 @@ def run(args: argparse.Namespace) -> int:
         runtime_notes.append("validation-mode=static，僅執行 static validation。")
 
     case = build_case_spec()
+    catalog_notes.extend(apply_catalog_fixtures([case], benchmark_case_index, LARGE_CATALOG_CASE_MAP, case_key="benchmark_case_id"))
+    catalog_notes.extend(annotate_cases_with_catalog([case], benchmark_case_index, LARGE_CATALOG_CASE_MAP, case_key="benchmark_case_id"))
     case_workspace = case_workspaces_dir / case["benchmark_case_id"]
     java_files = prepare_workspace(case_workspace, case)
     prompt_path = case_workspace / "runtime_prompt.txt"
@@ -363,6 +384,8 @@ def run(args: argparse.Namespace) -> int:
         result = {
             "benchmark_case_id": case["benchmark_case_id"],
             "category": case["category"],
+            "catalog_case_ids": case.get("catalog_case_ids", []),
+            "catalog_primary_signals": case.get("catalog_primary_signals", []),
             "java_file_count": len(java_files),
             "validation_mode": validation_mode,
             **runtime_result,
@@ -373,6 +396,8 @@ def run(args: argparse.Namespace) -> int:
         result = {
             "benchmark_case_id": case["benchmark_case_id"],
             "category": case["category"],
+            "catalog_case_ids": case.get("catalog_case_ids", []),
+            "catalog_primary_signals": case.get("catalog_primary_signals", []),
             "java_file_count": len(java_files),
             "validation_mode": validation_mode,
             "actual_findings": [],
@@ -394,12 +419,17 @@ def run(args: argparse.Namespace) -> int:
         }
 
     results = [result]
+    catalog_alignment = summarize_catalog_alignment([case], case_key="benchmark_case_id")
     summary = {
         "working_directory": str(skill_root),
         "command": " ".join(shlex.quote(part) for part in [sys.executable, *sys.argv]),
         "exit_code": 0,
         "scenario": "large_codebase_workflow",
         "validation_mode": validation_mode,
+        "benchmark_catalog_version": benchmark_catalog.get("version"),
+        "benchmark_catalog_layer": "large_codebase",
+        "benchmark_catalog_case_count": len(benchmark_case_index),
+        "catalog_alignment": catalog_alignment,
         "total_benchmark_cases": 1,
         "passed_benchmark_cases": sum(1 for item in results if item["passed"]),
         "failed_benchmark_cases": sum(1 for item in results if not item["passed"]),
@@ -423,7 +453,7 @@ def run(args: argparse.Namespace) -> int:
             "readme_relative": relative_to_root(skill_root / "skill_validation" / "README_large_benchmark.md", skill_root),
             "readme_absolute": str((skill_root / "skill_validation" / "README_large_benchmark.md").resolve()),
         },
-        "notes": manifest_notes + runtime_notes + result.get("workflow_issues", []),
+        "notes": manifest_notes + catalog_notes + runtime_notes + result.get("workflow_issues", []),
     }
 
     write_jsonl(output_dir / "large_benchmark_results.jsonl", results)

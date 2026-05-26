@@ -13,6 +13,9 @@ from pathlib import Path
 from typing import Any
 
 from run_golden_tests import (
+    annotate_cases_with_catalog,
+    apply_catalog_fixtures,
+    build_benchmark_case_index,
     build_runtime_command,
     build_source_manifest,
     compare_finding,
@@ -24,13 +27,16 @@ from run_golden_tests import (
     gate_c_status,
     gate_d_status,
     gate_e_status,
+    get_benchmark_layer,
     is_template_compliant,
     is_workflow_compliant,
+    load_benchmark_catalog,
     parse_actual_findings,
     parse_rule_sections,
     read_text_with_fallback,
     relative_to_root,
     resolve_skill_root,
+    summarize_catalog_alignment,
     write_json,
     write_jsonl,
 )
@@ -43,6 +49,13 @@ REQUIRED_SOURCES = [
     "references/java-rules.md",
 ]
 RUNTIME_ENV_KEY = "CODEX_RUNTIME_COMMAND"
+DIFF_CATALOG_CASE_MAP = {
+    "security-diff-01": ["diff-security-scope-01"],
+    "null-safety-diff-01": ["diff-null-safety-01"],
+    "transaction-diff-01": ["diff-transaction-01"],
+    "performance-diff-01": ["diff-performance-logging-01"],
+    "maintainability-diff-01": ["diff-maintainability-01"],
+}
 
 
 def parse_args() -> argparse.Namespace:
@@ -459,9 +472,12 @@ def generate_cases(
     diff_cases_dir: Path,
     rule_sections: dict[str, str],
     source_texts: dict[str, str],
+    catalog_index: dict[str, dict[str, Any]] | None = None,
 ) -> tuple[list[dict[str, Any]], list[str]]:
     notes: list[str] = []
     cases = build_diff_case_specs()
+    if catalog_index:
+        notes.extend(apply_catalog_fixtures(cases, catalog_index, DIFF_CATALOG_CASE_MAP))
     compact_template = extract_heading_section(
         source_texts.get("references/report-templates.md", ""),
         "Compact 正式 Review 模板",
@@ -731,9 +747,13 @@ def run(args: argparse.Namespace) -> int:
     invocation_command = " ".join(shlex.quote(part) for part in [sys.executable, *sys.argv])
 
     source_manifest, source_texts, manifest_notes = build_source_manifest(skill_root)
+    benchmark_catalog, catalog_notes = load_benchmark_catalog(skill_root)
+    benchmark_layer = get_benchmark_layer(benchmark_catalog, "diff_pr")
+    benchmark_case_index = build_benchmark_case_index(benchmark_layer)
     java_rules_text = source_texts.get("references/java-rules.md", "")
     rule_sections = parse_rule_sections(java_rules_text) if java_rules_text else {}
-    cases, case_notes = generate_cases(skill_root, diff_cases_dir, rule_sections, source_texts)
+    cases, case_notes = generate_cases(skill_root, diff_cases_dir, rule_sections, source_texts, benchmark_case_index)
+    case_notes.extend(annotate_cases_with_catalog(cases, benchmark_case_index, DIFF_CATALOG_CASE_MAP))
 
     validation_mode = "static_validation_only"
     runtime_template: list[str] | None = None
@@ -773,6 +793,8 @@ def run(args: argparse.Namespace) -> int:
                 "golden_case_id": case["golden_case_id"],
                 "scenario": "diff_pr",
                 "category": case["category"],
+                "catalog_case_ids": case.get("catalog_case_ids", []),
+                "catalog_primary_signals": case.get("catalog_primary_signals", []),
                 "changed_files": changed_files,
                 "unchanged_files": unchanged_files,
                 "expected_findings": case["expected_findings"],
@@ -785,6 +807,8 @@ def run(args: argparse.Namespace) -> int:
                 "golden_case_id": case["golden_case_id"],
                 "scenario": "diff_pr",
                 "category": case["category"],
+                "catalog_case_ids": case.get("catalog_case_ids", []),
+                "catalog_primary_signals": case.get("catalog_primary_signals", []),
                 "changed_files": changed_files,
                 "unchanged_files": unchanged_files,
                 "expected_findings": case["expected_findings"],
@@ -869,6 +893,7 @@ def run(args: argparse.Namespace) -> int:
     ]
     average_precision = sum(result["precision_estimate"] for result in results) / len(results) if results else 0.0
     average_recall = sum(result["recall_estimate"] for result in results) / len(results) if results else 0.0
+    catalog_alignment = summarize_catalog_alignment(cases)
 
     summary: dict[str, Any] = {
         "working_directory": str(skill_root),
@@ -876,6 +901,10 @@ def run(args: argparse.Namespace) -> int:
         "exit_code": 0,
         "scenario": "diff_pr",
         "validation_mode": validation_mode,
+        "benchmark_catalog_version": benchmark_catalog.get("version"),
+        "benchmark_catalog_layer": "diff_pr",
+        "benchmark_catalog_case_count": len(benchmark_case_index),
+        "catalog_alignment": catalog_alignment,
         "total_golden_cases": len(results),
         "passed_golden_cases": passed_cases,
         "failed_golden_cases": failed_cases,
@@ -907,7 +936,7 @@ def run(args: argparse.Namespace) -> int:
             "readme_relative": relative_to_root(readme_path, skill_root),
             "readme_absolute": str(readme_path),
         },
-        "notes": manifest_notes + case_notes + runtime_notes + gate_a_notes + gate_b_notes + gate_c_notes + gate_d_notes,
+        "notes": manifest_notes + catalog_notes + case_notes + runtime_notes + gate_a_notes + gate_b_notes + gate_c_notes + gate_d_notes,
     }
 
     gate_e, gate_e_notes = gate_e_status(summary, results)

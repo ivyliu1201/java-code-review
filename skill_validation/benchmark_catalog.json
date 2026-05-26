@@ -1,0 +1,552 @@
+{
+  "version": 2,
+  "goal": "Validate java-code-review for large-project Java backend reviews without letting parser or golden wording redefine the runtime skill.",
+  "signals": {
+    "quality": "Find the intended high-risk issue with concrete evidence and without must-not findings.",
+    "scope": "Stay within the intended review scope and disclose any pending or excluded scope honestly.",
+    "workflow": "Produce the workflow signals needed for the benchmark layer, including Chinese table findings where applicable."
+  },
+  "layers": [
+    {
+      "layer_id": "single_file",
+      "description": "Rule-hit benchmark for compact review mode.",
+      "required_signals": ["quality", "workflow"],
+      "cases": [
+        {
+          "case_id": "sf-security-masking-01",
+          "rules_under_test": ["H-2"],
+          "primary_signal": "quality",
+          "scenario": "Return and log full sensitive user fields.",
+          "expected_findings": ["sensitive field exposure", "sensitive data in logs"],
+          "must_not_findings": ["naming-only", "style-only"],
+          "fixture": {
+            "golden_case_id": "security-01",
+            "category": "security",
+            "java_file": "SensitiveProfileService.java",
+            "java_source": "package com.example.profile;\n\nimport org.slf4j.Logger;\nimport org.slf4j.LoggerFactory;\n\npublic class SensitiveProfileService {\n    private static final Logger log = LoggerFactory.getLogger(SensitiveProfileService.class);\n\n    public UserProfileResponse getProfile(User user) {\n        log.info(\"profile loaded, user={}\", user);\n        return new UserProfileResponse(\n                user.getName(),\n                user.getMobile(),\n                user.getEmail(),\n                user.getIdNo(),\n                user.getCardNo());\n    }\n}\n",
+            "must_not_findings": ["命名規則違反", "常數規則違反"],
+            "source_rules_under_test": ["H-2"],
+            "expected_findings": [
+              {
+                "rule_id": "H-2",
+                "severity": "high",
+                "expected_issue": "直接回傳完整敏感資料，沒有做最小化與脫敏。",
+                "expected_evidence": "UserProfileResponse getMobile getEmail getIdNo getCardNo",
+                "expected_recommendation": "不要直接回傳完整敏感欄位，改為最小化欄位與遮罩後 DTO。"
+              },
+              {
+                "rule_id": "H-2",
+                "severity": "high",
+                "expected_issue": "直接把完整 user 物件寫入日誌，沒有做脫敏。",
+                "expected_evidence": "log.info user",
+                "expected_recommendation": "避免記錄完整 user object，改記 userId 或脫敏後欄位。"
+              }
+            ]
+          }
+        },
+        {
+          "case_id": "sf-null-safe-equals-01",
+          "rules_under_test": ["B-1"],
+          "primary_signal": "quality",
+          "scenario": "Call equals on a nullable status field.",
+          "expected_findings": ["null-safety risk"],
+          "must_not_findings": ["sql", "transaction"],
+          "fixture_variants": {
+            "null-safety-01": {
+              "golden_case_id": "null-safety-01",
+              "category": "null_safety",
+              "java_file": "OrderStatusChecker.java",
+              "java_source": "package com.example.order;\n\npublic class OrderStatusChecker {\n    public boolean isPaid(Order order) {\n        return order.getStatus().equals(\"PAID\");\n    }\n}\n",
+              "must_not_findings": ["SQL injection", "交易邊界錯誤"],
+              "source_rules_under_test": ["B-1"],
+              "expected_findings": [
+                {
+                  "rule_id": "B-1",
+                  "severity": "medium",
+                  "expected_issue": "可能為 null 的值主動呼叫 equals，存在 NullPointerException 風險。",
+                  "expected_evidence": "order.getStatus().equals(\"PAID\")",
+                  "expected_recommendation": "改用常量發起 equals，例如 \"PAID\".equals(order.getStatus())，必要時補 null guard。"
+                }
+              ]
+            },
+            "null-safety-holdout-01": {
+              "golden_case_id": "null-safety-holdout-01",
+              "category": "null_safety",
+              "java_file": "MemberLevelChecker.java",
+              "java_source": "package com.example.member;\n\npublic class MemberLevelChecker {\n    public boolean isVip(Member member) {\n        return member.getLevel().equals(\"VIP\");\n    }\n}\n",
+              "must_not_findings": ["SQL injection", "交易邊界錯誤"],
+              "source_rules_under_test": ["B-1"],
+              "expected_findings": [
+                {
+                  "rule_id": "B-1",
+                  "severity": "medium",
+                  "expected_issue": "可能為 null 的值主動呼叫 equals，存在 NullPointerException 風險。",
+                  "expected_evidence": "member.getLevel().equals(\"VIP\")",
+                  "expected_recommendation": "改用常量發起 equals，例如 \"VIP\".equals(member.getLevel())，必要時補 null guard。"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "case_id": "sf-transaction-boundary-01",
+          "rules_under_test": ["L-1", "J-7"],
+          "primary_signal": "quality",
+          "scenario": "Call external payment inside a local transaction.",
+          "expected_findings": ["transaction boundary risk"],
+          "must_not_findings": ["missing annotation only"],
+          "fixture": {
+            "golden_case_id": "transaction-01",
+            "category": "transaction",
+            "java_file": "CheckoutService.java",
+            "java_source": "package com.example.checkout;\n\nimport org.springframework.transaction.annotation.Transactional;\n\npublic class CheckoutService {\n    private final OrderRepository orderRepository;\n    private final PaymentClient paymentClient;\n    private final AuditRepository auditRepository;\n\n    public CheckoutService(OrderRepository orderRepository, PaymentClient paymentClient, AuditRepository auditRepository) {\n        this.orderRepository = orderRepository;\n        this.paymentClient = paymentClient;\n        this.auditRepository = auditRepository;\n    }\n\n    @Transactional\n    public void completeCheckout(CheckoutRequest request) {\n        orderRepository.save(request.toOrder());\n        paymentClient.charge(request.getPaymentToken(), request.getAmount());\n        auditRepository.save(AuditLog.success(request.getOrderId()));\n    }\n}\n",
+            "must_not_findings": ["缺少 @Transactional", "命名規則違反"],
+            "source_rules_under_test": ["L-1"],
+            "expected_findings": [
+              {
+                "rule_id": "L-1",
+                "severity": "high",
+                "expected_issue": "在 @Transactional 交易內直接呼叫外部支付系統，可能破壞交易一致性。",
+                "expected_evidence": "@Transactional paymentClient.charge",
+                "expected_recommendation": "把外部呼叫移出本地交易邊界，或改用可補償的非同步 / outbox 設計。"
+              }
+            ]
+          }
+        },
+        {
+          "case_id": "sf-idempotency-01",
+          "rules_under_test": ["J-6"],
+          "primary_signal": "quality",
+          "scenario": "Non-repeatable payment or coupon flow without idempotency.",
+          "expected_findings": ["duplicate side effect risk"],
+          "must_not_findings": ["format-only"],
+          "fixture": {
+            "golden_case_id": "transaction-holdout-01",
+            "category": "transaction",
+            "java_file": "CouponGrantService.java",
+            "java_source": "package com.example.coupon;\n\npublic class CouponGrantService {\n    private final CouponClient couponClient;\n    private final GrantLogRepository grantLogRepository;\n\n    public CouponGrantService(CouponClient couponClient, GrantLogRepository grantLogRepository) {\n        this.couponClient = couponClient;\n        this.grantLogRepository = grantLogRepository;\n    }\n\n    public void grantCoupon(GrantCouponRequest request) {\n        couponClient.issue(request.getUserId(), request.getCouponCode());\n        grantLogRepository.save(GrantLog.success(\n                request.getRequestId(),\n                request.getUserId(),\n                request.getCouponCode()));\n    }\n}\n",
+            "must_not_findings": ["缺少 @Transactional", "命名規則違反"],
+            "source_rules_under_test": ["J-6"],
+            "expected_findings": [
+              {
+                "rule_id": "J-6",
+                "severity": "high",
+                "expected_issue": "不可重複執行的發券流程看不到冪等設計，重試時可能重複發券。",
+                "expected_evidence": "grantCoupon couponClient.issue request.getRequestId grantLogRepository.save",
+                "expected_recommendation": "在發券邊界使用 requestId 或其他 idempotency key，搭配唯一約束、狀態檢查或 duplicate handling，避免重複發券。"
+              }
+            ]
+          }
+        },
+        {
+          "case_id": "sf-state-transition-01",
+          "rules_under_test": ["J-1"],
+          "primary_signal": "quality",
+          "scenario": "Request status directly overwrites persisted status.",
+          "expected_findings": ["invalid state transition"],
+          "must_not_findings": ["controller-heavy only"]
+        },
+        {
+          "case_id": "sf-dto-entity-boundary-01",
+          "rules_under_test": ["L-3"],
+          "primary_signal": "quality",
+          "scenario": "Controller uses Entity for request and response.",
+          "expected_findings": ["dto entity boundary risk"],
+          "must_not_findings": ["speculative serialization risk without evidence"],
+          "fixture": {
+            "golden_case_id": "maintainability-holdout-01",
+            "category": "maintainability",
+            "java_file": "UserController.java",
+            "java_source": "package com.example.user;\n\nimport org.springframework.web.bind.annotation.PostMapping;\nimport org.springframework.web.bind.annotation.RequestBody;\nimport org.springframework.web.bind.annotation.RestController;\n\n@RestController\npublic class UserController {\n    private final UserRepository userRepository;\n\n    public UserController(UserRepository userRepository) {\n        this.userRepository = userRepository;\n    }\n\n    @PostMapping(\"/users\")\n    public UserEntity create(@RequestBody UserEntity user) {\n        return userRepository.save(user);\n    }\n}\n",
+            "must_not_findings": ["敏感資料外洩", "SQL injection"],
+            "source_rules_under_test": ["L-3"],
+            "expected_findings": [
+              {
+                "rule_id": "L-3",
+                "severity": "high",
+                "expected_issue": "Request DTO、Response DTO 與 Entity 直接混用，會讓 API 邊界與資料模型耦合。",
+                "expected_evidence": "@RequestBody UserEntity return userRepository.save(user)",
+                "expected_recommendation": "改用明確的 CreateUserRequest 與 UserResponse，避免直接接收或回傳 Entity。"
+              }
+            ]
+          }
+        },
+        {
+          "case_id": "sf-time-boundary-01",
+          "rules_under_test": ["J-10"],
+          "primary_signal": "quality",
+          "scenario": "Business time logic uses local now without timezone or boundary clarity.",
+          "expected_findings": ["time boundary risk"],
+          "must_not_findings": ["threading"]
+        },
+        {
+          "case_id": "sf-cache-sensitive-data-01",
+          "rules_under_test": ["M-4"],
+          "primary_signal": "quality",
+          "scenario": "Cache stores full token or other sensitive value.",
+          "expected_findings": ["sensitive cache payload"],
+          "must_not_findings": ["cache key speculation"],
+          "fixture": {
+            "golden_case_id": "security-holdout-01",
+            "category": "security",
+            "java_file": "SessionCacheService.java",
+            "java_source": "package com.example.session;\n\npublic class SessionCacheService {\n    private final CacheClient cacheClient;\n\n    public SessionCacheService(CacheClient cacheClient) {\n        this.cacheClient = cacheClient;\n    }\n\n    public void cacheSession(UserSession session) {\n        cacheClient.put(\n                \"session:\" + session.getUserId(),\n                new SessionSnapshot(\n                        session.getUserId(),\n                        session.getEmail(),\n                        session.getCardNo(),\n                        session.getAccessToken()));\n    }\n}\n",
+            "must_not_findings": ["命名規則違反", "常數規則違反"],
+            "source_rules_under_test": ["M-4"],
+            "expected_findings": [
+              {
+                "rule_id": "M-4",
+                "severity": "high",
+                "expected_issue": "Cache 中直接存放完整敏感資料與 access token，缺少最小化與保護。",
+                "expected_evidence": "cacheClient.put SessionSnapshot getEmail getCardNo getAccessToken",
+                "expected_recommendation": "不要把完整敏感資料與 token 直接放進 cache，只保留必要欄位，必要時改存脫敏值或短期識別資訊。"
+              }
+            ]
+          }
+        },
+        {
+          "case_id": "sf-performance-logging-01",
+          "rules_under_test": ["F-3"],
+          "primary_signal": "quality",
+          "scenario": "Logging path performs unconditional expensive string assembly or serialization.",
+          "expected_findings": ["performance logging risk"],
+          "must_not_findings": ["null-safety", "transaction"],
+          "fixture_variants": {
+            "performance-01": {
+              "golden_case_id": "performance-01",
+              "category": "performance",
+              "java_file": "OrderQueryService.java",
+              "java_source": "package com.example.query;\n\nimport com.fasterxml.jackson.core.JsonProcessingException;\nimport com.fasterxml.jackson.databind.ObjectMapper;\nimport org.slf4j.Logger;\nimport org.slf4j.LoggerFactory;\n\npublic class OrderQueryService {\n    private static final Logger log = LoggerFactory.getLogger(OrderQueryService.class);\n    private final ObjectMapper objectMapper = new ObjectMapper();\n\n    public OrderResponse query(OrderResponse response) throws JsonProcessingException {\n        log.debug(\"response=\" + objectMapper.writeValueAsString(response));\n        return response;\n    }\n}\n",
+              "must_not_findings": ["NullPointerException 風險", "交易邊界錯誤"],
+              "source_rules_under_test": ["F-3"],
+              "expected_findings": [
+                {
+                  "rule_id": "F-3",
+                  "severity": "medium",
+                  "expected_issue": "高頻路徑使用無條件字串拼接與序列化日誌，會造成不必要的效能成本。",
+                  "expected_evidence": "log.debug(\"response=\" + objectMapper.writeValueAsString(response))",
+                  "expected_recommendation": "改用參數化日誌，若需要昂貴序列化則先用 log level guard。"
+                }
+              ]
+            },
+            "performance-holdout-01": {
+              "golden_case_id": "performance-holdout-01",
+              "category": "performance",
+              "java_file": "BatchSyncService.java",
+              "java_source": "package com.example.sync;\n\nimport com.fasterxml.jackson.core.JsonProcessingException;\nimport com.fasterxml.jackson.databind.ObjectMapper;\nimport java.util.List;\nimport org.slf4j.Logger;\nimport org.slf4j.LoggerFactory;\n\npublic class BatchSyncService {\n    private static final Logger log = LoggerFactory.getLogger(BatchSyncService.class);\n    private final ObjectMapper objectMapper = new ObjectMapper();\n\n    public void sync(List<Order> orders) throws JsonProcessingException {\n        for (Order order : orders) {\n            log.info(\"sync payload=\" + objectMapper.writeValueAsString(order));\n        }\n    }\n}\n",
+              "must_not_findings": ["NullPointerException 風險", "交易邊界錯誤"],
+              "source_rules_under_test": ["F-3"],
+              "expected_findings": [
+                {
+                  "rule_id": "F-3",
+                  "severity": "medium",
+                  "expected_issue": "迴圈中的無條件字串拼接與序列化日誌會造成不必要的效能成本。",
+                  "expected_evidence": "for log.info objectMapper.writeValueAsString(order)",
+                  "expected_recommendation": "改用參數化日誌，若序列化成本高則加 log level guard，避免在迴圈中每次都做昂貴字串組裝。"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "case_id": "sf-long-method-01",
+          "rules_under_test": ["B-5"],
+          "primary_signal": "quality",
+          "scenario": "A single application method mixes validation, persistence, side effects, and notifications.",
+          "expected_findings": ["single responsibility breakdown"],
+          "must_not_findings": ["security-only speculation"],
+          "fixture": {
+            "golden_case_id": "maintainability-01",
+            "category": "maintainability",
+            "java_file": "OrderApplicationService.java",
+            "java_source": "package com.example.application;\n\npublic class OrderApplicationService {\n    public OrderResult submitOrder(CreateOrderRequest request) {\n        if (request == null || request.getUserId() == null || request.getItems() == null || request.getItems().isEmpty()) {\n            throw new IllegalArgumentException(\"bad request\");\n        }\n        User user = userRepository.findById(request.getUserId());\n        if (user == null) {\n            throw new IllegalStateException(\"user not found\");\n        }\n        Order order = new Order();\n        order.setUserId(user.getId());\n        order.setAddress(request.getAddress());\n        order.setItems(request.getItems());\n        order.calculateAmount();\n        orderRepository.save(order);\n        inventoryService.reserve(order.getItems());\n        couponService.consume(request.getCouponId());\n        emailService.sendCreatedEmail(user.getEmail(), order.getId());\n        auditService.record(\"order created\", user.getId(), order.getId());\n        return new OrderResult(order.getId(), order.getAmount());\n    }\n\n    private UserRepository userRepository;\n    private OrderRepository orderRepository;\n    private InventoryService inventoryService;\n    private CouponService couponService;\n    private EmailService emailService;\n    private AuditService auditService;\n}\n",
+            "must_not_findings": ["敏感資料外洩", "SQL injection"],
+            "source_rules_under_test": ["B-5"],
+            "expected_findings": [
+              {
+                "rule_id": "B-5",
+                "severity": "medium",
+                "expected_issue": "單一方法同時處理驗證、查詢、組裝、持久化、通知與稽核，違反單一職責。",
+                "expected_evidence": "submitOrder validation findById save reserve consume sendCreatedEmail record",
+                "expected_recommendation": "拆分成 validation、載入使用者、建立訂單、持久化、通知與稽核等明確方法。"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "layer_id": "diff_pr",
+      "description": "Diff and pull-request review scope benchmark.",
+      "required_signals": ["quality", "scope", "workflow"],
+      "cases": [
+        {
+          "case_id": "diff-security-scope-01",
+          "rules_under_test": ["H-2"],
+          "primary_signal": "scope",
+          "scenario": "Changed file exposes sensitive data while unchanged distractor file has a separate severe issue.",
+          "expected_findings": ["changed-file sensitive exposure"],
+          "must_not_findings": ["unchanged-file findings"],
+          "scope_guards": ["do not mention unchanged hotspot"],
+          "fixture": {
+            "golden_case_id": "security-diff-01",
+            "category": "security",
+            "source_rules_under_test": ["H-2"],
+            "must_not_findings": ["NullPointerException 風險", "交易邊界錯誤"],
+            "base_files": {
+              "src/main/java/com/example/profile/UserProfileController.java": "package com.example.profile;\n\npublic class UserProfileController {\n    public UserProfileResponse getProfile(User user) {\n        return new UserProfileResponse(\n                user.getName(),\n                maskMobile(user.getMobile()),\n                maskEmail(user.getEmail()));\n    }\n\n    private String maskMobile(String mobile) {\n        return mobile == null ? null : mobile.substring(0, 3) + \"****\";\n    }\n\n    private String maskEmail(String email) {\n        return email == null ? null : \"****\";\n    }\n}\n",
+              "src/main/java/com/example/legacy/LegacyStatusService.java": "package com.example.legacy;\n\npublic class LegacyStatusService {\n    public boolean isPaid(Order order) {\n        return order.getStatus().equals(\"PAID\");\n    }\n}\n"
+            },
+            "changed_files": {
+              "src/main/java/com/example/profile/UserProfileController.java": "package com.example.profile;\n\npublic class UserProfileController {\n    public UserProfileResponse getProfile(User user) {\n        return new UserProfileResponse(\n                user.getName(),\n                user.getMobile(),\n                user.getEmail(),\n                user.getCardNo());\n    }\n}\n"
+            },
+            "expected_findings": [
+              {
+                "rule_id": "H-2",
+                "severity": "high",
+                "expected_issue": "Diff 直接回傳完整敏感資料，沒有做最小化與脫敏。",
+                "expected_evidence": "完整手機 Email 卡號 移除脫敏",
+                "expected_recommendation": "不要在 response 直接回傳完整敏感欄位，改為最小化欄位與脫敏後值。",
+                "expected_filename": "userprofilecontroller.java"
+              }
+            ]
+          }
+        },
+        {
+          "case_id": "diff-null-safety-01",
+          "rules_under_test": ["B-1"],
+          "primary_signal": "quality",
+          "scenario": "A small diff introduces nullable equals risk.",
+          "expected_findings": ["null-safety risk"],
+          "must_not_findings": ["unrelated architecture discussion"],
+          "fixture": {
+            "golden_case_id": "null-safety-diff-01",
+            "category": "null_safety",
+            "source_rules_under_test": ["B-1"],
+            "must_not_findings": ["敏感資料外洩", "SQL injection"],
+            "base_files": {
+              "src/main/java/com/example/order/OrderStatusChecker.java": "package com.example.order;\n\npublic class OrderStatusChecker {\n    public boolean isPaid(Order order) {\n        return \"PAID\".equals(order.getStatus());\n    }\n}\n",
+              "src/main/java/com/example/cache/SessionCacheService.java": "package com.example.cache;\n\npublic class SessionCacheService {\n    public void save(UserSession session, CacheClient cacheClient) {\n        cacheClient.put(\"session:\" + session.getUserId(), session.getAccessToken());\n    }\n}\n"
+            },
+            "changed_files": {
+              "src/main/java/com/example/order/OrderStatusChecker.java": "package com.example.order;\n\npublic class OrderStatusChecker {\n    public boolean isPaid(Order order) {\n        return order.getStatus().equals(\"PAID\");\n    }\n}\n"
+            },
+            "expected_findings": [
+              {
+                "rule_id": "B-1",
+                "severity": "medium",
+                "expected_issue": "Diff 對可能為 null 的值主動呼叫 equals，存在 NullPointerException 風險。",
+                "expected_evidence": "order.getStatus().equals(\"PAID\")",
+                "expected_recommendation": "改用常量發起 equals，例如 \"PAID\".equals(order.getStatus())，必要時補 null guard。",
+                "expected_filename": "orderstatuschecker.java"
+              }
+            ]
+          }
+        },
+        {
+          "case_id": "diff-transaction-01",
+          "rules_under_test": ["L-1", "J-7"],
+          "primary_signal": "quality",
+          "scenario": "A narrow service diff moves an external call inside a transaction.",
+          "expected_findings": ["transaction boundary risk"],
+          "must_not_findings": ["unchanged repository findings"],
+          "fixture": {
+            "golden_case_id": "transaction-diff-01",
+            "category": "transaction",
+            "source_rules_under_test": ["L-1"],
+            "must_not_findings": ["命名規則違反", "常數規則違反"],
+            "base_files": {
+              "src/main/java/com/example/checkout/CheckoutService.java": "package com.example.checkout;\n\npublic class CheckoutService {\n    private final OrderRepository orderRepository;\n    private final PaymentOrchestrator paymentOrchestrator;\n\n    public CheckoutService(OrderRepository orderRepository, PaymentOrchestrator paymentOrchestrator) {\n        this.orderRepository = orderRepository;\n        this.paymentOrchestrator = paymentOrchestrator;\n    }\n\n    public void completeCheckout(CheckoutRequest request) {\n        orderRepository.save(request.toOrder());\n        paymentOrchestrator.requestCharge(request.getOrderId(), request.getAmount());\n    }\n}\n",
+              "src/main/java/com/example/legacy/LegacyProfileService.java": "package com.example.legacy;\n\npublic class LegacyProfileService {\n    public UserProfileResponse build(User user) {\n        return new UserProfileResponse(user.getName(), user.getIdNo());\n    }\n}\n"
+            },
+            "changed_files": {
+              "src/main/java/com/example/checkout/CheckoutService.java": "package com.example.checkout;\n\nimport org.springframework.transaction.annotation.Transactional;\n\npublic class CheckoutService {\n    private final OrderRepository orderRepository;\n    private final PaymentClient paymentClient;\n    private final AuditRepository auditRepository;\n\n    public CheckoutService(OrderRepository orderRepository, PaymentClient paymentClient, AuditRepository auditRepository) {\n        this.orderRepository = orderRepository;\n        this.paymentClient = paymentClient;\n        this.auditRepository = auditRepository;\n    }\n\n    @Transactional\n    public void completeCheckout(CheckoutRequest request) {\n        orderRepository.save(request.toOrder());\n        paymentClient.charge(request.getPaymentToken(), request.getAmount());\n        auditRepository.save(AuditLog.success(request.getOrderId()));\n    }\n}\n"
+            },
+            "expected_findings": [
+              {
+                "rule_id": "L-1",
+                "severity": "high",
+                "expected_issue": "Diff 在 @Transactional 交易內直接呼叫外部支付系統，可能破壞交易一致性。",
+                "expected_evidence": "@Transactional paymentClient.charge",
+                "expected_recommendation": "把外部呼叫移出本地交易邊界，或改用可補償的非同步 / outbox 設計。",
+                "expected_filename": "checkoutservice.java"
+              }
+            ]
+          }
+        },
+        {
+          "case_id": "diff-maintainability-01",
+          "rules_under_test": ["L-3"],
+          "primary_signal": "quality",
+          "scenario": "A controller diff starts accepting or returning Entity directly.",
+          "expected_findings": ["dto entity boundary risk"],
+          "must_not_findings": ["speculative lazy-loading issue"],
+          "fixture": {
+            "golden_case_id": "maintainability-diff-01",
+            "category": "maintainability",
+            "source_rules_under_test": ["L-3"],
+            "must_not_findings": ["NullPointerException 風險", "交易邊界錯誤"],
+            "base_files": {
+              "src/main/java/com/example/user/UserController.java": "package com.example.user;\n\nimport org.springframework.web.bind.annotation.PostMapping;\nimport org.springframework.web.bind.annotation.RequestBody;\nimport org.springframework.web.bind.annotation.RestController;\n\n@RestController\npublic class UserController {\n    private final UserService userService;\n\n    public UserController(UserService userService) {\n        this.userService = userService;\n    }\n\n    @PostMapping(\"/users\")\n    public UserResponse create(@RequestBody CreateUserRequest request) {\n        return userService.create(request);\n    }\n}\n",
+              "src/main/java/com/example/legacy/LegacyAuditService.java": "package com.example.legacy;\n\npublic class LegacyAuditService {\n    public void record(String action, User user) {\n        System.out.println(user.getPassword());\n    }\n}\n"
+            },
+            "changed_files": {
+              "src/main/java/com/example/user/UserController.java": "package com.example.user;\n\nimport org.springframework.web.bind.annotation.PostMapping;\nimport org.springframework.web.bind.annotation.RequestBody;\nimport org.springframework.web.bind.annotation.RestController;\n\n@RestController\npublic class UserController {\n    private final UserRepository userRepository;\n\n    public UserController(UserRepository userRepository) {\n        this.userRepository = userRepository;\n    }\n\n    @PostMapping(\"/users\")\n    public UserEntity create(@RequestBody UserEntity user) {\n        return userRepository.save(user);\n    }\n}\n"
+            },
+            "expected_findings": [
+              {
+                "rule_id": "L-3",
+                "severity": "high",
+                "expected_issue": "Diff 直接使用 Entity 作為 request 與 response，會讓 API 邊界與資料模型耦合。",
+                "expected_evidence": "@RequestBody UserEntity return userRepository.save(user)",
+                "expected_recommendation": "改用明確的 CreateUserRequest 與 UserResponse，避免直接接收或回傳 Entity。",
+                "expected_filename": "usercontroller.java"
+              }
+            ]
+          }
+        },
+        {
+          "case_id": "diff-performance-logging-01",
+          "rules_under_test": ["F-3"],
+          "primary_signal": "quality",
+          "scenario": "A small diff turns lightweight logging into unconditional expensive serialization inside a loop.",
+          "expected_findings": ["performance logging risk"],
+          "must_not_findings": ["transaction", "naming"],
+          "fixture": {
+            "golden_case_id": "performance-diff-01",
+            "category": "performance",
+            "source_rules_under_test": ["F-3"],
+            "must_not_findings": ["交易邊界錯誤", "命名規則違反"],
+            "base_files": {
+              "src/main/java/com/example/query/OrderQueryService.java": "package com.example.query;\n\nimport com.fasterxml.jackson.core.JsonProcessingException;\nimport com.fasterxml.jackson.databind.ObjectMapper;\nimport java.util.List;\nimport org.slf4j.Logger;\nimport org.slf4j.LoggerFactory;\n\npublic class OrderQueryService {\n    private static final Logger log = LoggerFactory.getLogger(OrderQueryService.class);\n    private final ObjectMapper objectMapper = new ObjectMapper();\n\n    public void query(List<OrderResponse> responses) throws JsonProcessingException {\n        for (OrderResponse response : responses) {\n            log.debug(\"response={}\", response.getOrderId());\n        }\n    }\n}\n",
+              "src/main/java/com/example/legacy/LegacyCheckoutService.java": "package com.example.legacy;\n\npublic class LegacyCheckoutService {\n    public void complete(CheckoutRequest request, PaymentClient paymentClient) {\n        paymentClient.charge(request.getPaymentToken(), request.getAmount());\n    }\n}\n"
+            },
+            "changed_files": {
+              "src/main/java/com/example/query/OrderQueryService.java": "package com.example.query;\n\nimport com.fasterxml.jackson.core.JsonProcessingException;\nimport com.fasterxml.jackson.databind.ObjectMapper;\nimport java.util.List;\nimport org.slf4j.Logger;\nimport org.slf4j.LoggerFactory;\n\npublic class OrderQueryService {\n    private static final Logger log = LoggerFactory.getLogger(OrderQueryService.class);\n    private final ObjectMapper objectMapper = new ObjectMapper();\n\n    public void query(List<OrderResponse> responses) throws JsonProcessingException {\n        for (OrderResponse response : responses) {\n            log.debug(\"response=\" + objectMapper.writeValueAsString(response));\n        }\n    }\n}\n"
+            },
+            "expected_findings": [
+              {
+                "rule_id": "F-3",
+                "severity": "medium",
+                "expected_issue": "Diff 在迴圈中使用無條件字串拼接與序列化日誌，會造成不必要的效能成本。",
+                "expected_evidence": "for log.debug objectMapper.writeValueAsString(response)",
+                "expected_recommendation": "改用參數化日誌，若序列化成本高則加 log level guard，避免在迴圈中每次都做昂貴字串組裝。",
+                "expected_filename": "orderqueryservice.java"
+              }
+            ]
+          }
+        },
+        {
+          "case_id": "diff-cache-scope-01",
+          "rules_under_test": ["M-1", "M-4"],
+          "primary_signal": "scope",
+          "scenario": "Diff changes cache key/value logic only in one method.",
+          "expected_findings": ["cache key or sensitive cache payload issue when visible"],
+          "must_not_findings": ["whole-cache-layer redesign"],
+          "scope_guards": ["must stay near changed cache code"]
+        },
+        {
+          "case_id": "diff-test-only-change-01",
+          "rules_under_test": ["K-1", "K-2"],
+          "primary_signal": "scope",
+          "scenario": "PR changes only tests or review docs.",
+          "expected_findings": [],
+          "must_not_findings": ["fabricated production issue"],
+          "scope_guards": ["should report no production findings"]
+        },
+        {
+          "case_id": "diff-multi-file-order-01",
+          "rules_under_test": ["J-16"],
+          "primary_signal": "quality",
+          "scenario": "Two changed files together break multi-table consistency.",
+          "expected_findings": ["consistency boundary issue"],
+          "must_not_findings": ["single-file tunnel vision"]
+        },
+        {
+          "case_id": "diff-unchanged-hotspot-01",
+          "rules_under_test": [],
+          "primary_signal": "scope",
+          "scenario": "An unchanged file contains a much worse issue than the changed file.",
+          "expected_findings": ["only changed-file issue or no finding if diff is safe"],
+          "must_not_findings": ["unchanged hotspot mention"],
+          "scope_guards": ["do not chase unrelated severe distractor"]
+        }
+      ]
+    },
+    {
+      "layer_id": "large_codebase",
+      "description": "Project-scale workflow benchmark for large codebase review mode.",
+      "required_signals": ["quality", "scope", "workflow"],
+      "cases": [
+        {
+          "case_id": "lg-inventory-honesty-01",
+          "primary_signal": "scope",
+          "scenario": "More than ten Java files require a real inventory.",
+          "expected_workflow": ["scope", "inventory", "pending disclosure"],
+          "fixture": {
+            "benchmark_case_id": "large-codebase-01",
+            "category": "large_codebase_workflow",
+            "min_java_files": 11,
+            "expected_signal_files": ["CheckoutService.java", "UserProfileController.java", "OrderStatusChecker.java"],
+            "files": {
+              "src/main/java/com/example/account/AccountBalanceService.java": "package com.example.account;\n\npublic class AccountBalanceService {\n    public boolean hasEnough(Account account, long amount) {\n        return account.getBalance() >= amount;\n    }\n}\n",
+              "src/main/java/com/example/audit/AuditLogService.java": "package com.example.audit;\n\npublic class AuditLogService {\n    public void record(String action, User user) {\n        System.out.println(user.getId());\n    }\n}\n",
+              "src/main/java/com/example/cache/SessionCacheService.java": "package com.example.cache;\n\npublic class SessionCacheService {\n    public void save(UserSession session, CacheClient cacheClient) {\n        cacheClient.put(\"session:\" + session.getUserId(), session.getAccessToken());\n    }\n}\n",
+              "src/main/java/com/example/checkout/CheckoutService.java": "package com.example.checkout;\n\nimport org.springframework.transaction.annotation.Transactional;\n\npublic class CheckoutService {\n    private final OrderRepository orderRepository;\n    private final PaymentClient paymentClient;\n\n    public CheckoutService(OrderRepository orderRepository, PaymentClient paymentClient) {\n        this.orderRepository = orderRepository;\n        this.paymentClient = paymentClient;\n    }\n\n    @Transactional\n    public void complete(CheckoutRequest request) {\n        orderRepository.save(request.toOrder());\n        paymentClient.charge(request.getPaymentToken(), request.getAmount());\n    }\n}\n",
+              "src/main/java/com/example/order/OrderStatusChecker.java": "package com.example.order;\n\npublic class OrderStatusChecker {\n    public boolean isPaid(Order order) {\n        return order.getStatus().equals(\"PAID\");\n    }\n}\n",
+              "src/main/java/com/example/profile/UserProfileController.java": "package com.example.profile;\n\npublic class UserProfileController {\n    public UserProfileResponse getProfile(User user) {\n        return new UserProfileResponse(\n                user.getName(),\n                user.getMobile(),\n                user.getEmail(),\n                user.getCardNo());\n    }\n}\n",
+              "src/main/java/com/example/query/OrderQueryService.java": "package com.example.query;\n\nimport com.fasterxml.jackson.core.JsonProcessingException;\nimport com.fasterxml.jackson.databind.ObjectMapper;\nimport java.util.List;\nimport org.slf4j.Logger;\nimport org.slf4j.LoggerFactory;\n\npublic class OrderQueryService {\n    private static final Logger log = LoggerFactory.getLogger(OrderQueryService.class);\n    private final ObjectMapper objectMapper = new ObjectMapper();\n\n    public void query(List<OrderResponse> responses) throws JsonProcessingException {\n        for (OrderResponse response : responses) {\n            log.debug(\"response=\" + objectMapper.writeValueAsString(response));\n        }\n    }\n}\n",
+              "src/main/java/com/example/user/UserController.java": "package com.example.user;\n\nimport org.springframework.web.bind.annotation.PostMapping;\nimport org.springframework.web.bind.annotation.RequestBody;\nimport org.springframework.web.bind.annotation.RestController;\n\n@RestController\npublic class UserController {\n    private final UserRepository userRepository;\n\n    public UserController(UserRepository userRepository) {\n        this.userRepository = userRepository;\n    }\n\n    @PostMapping(\"/users\")\n    public UserEntity create(@RequestBody UserEntity user) {\n        return userRepository.save(user);\n    }\n}\n",
+              "src/main/java/com/example/notification/EmailNotificationService.java": "package com.example.notification;\n\npublic class EmailNotificationService {\n    public void send(User user, String content) {\n        System.out.println(user.getEmail() + \":\" + content);\n    }\n}\n",
+              "src/main/java/com/example/inventory/InventoryReservationService.java": "package com.example.inventory;\n\npublic class InventoryReservationService {\n    public void reserve(Product product, int quantity) {\n        product.setStock(product.getStock() - quantity);\n    }\n}\n",
+              "src/main/java/com/example/loyalty/CouponGrantService.java": "package com.example.loyalty;\n\npublic class CouponGrantService {\n    public void grantCoupon(CouponRequest request, CouponClient couponClient) {\n        couponClient.issue(request.getUserId(), request.getCouponCode());\n        couponClient.issue(request.getUserId(), request.getCouponCode());\n    }\n}\n",
+              "src/main/java/com/example/report/MonthlyReportService.java": "package com.example.report;\n\npublic class MonthlyReportService {\n    public String build(User user) {\n        return user.getName();\n    }\n}\n"
+            }
+          }
+        },
+        {
+          "case_id": "lg-batch-planning-01",
+          "primary_signal": "workflow",
+          "scenario": "A workspace large enough to force batch planning.",
+          "expected_workflow": ["current batch", "batch size control", "remaining files"]
+        },
+        {
+          "case_id": "lg-ledger-progress-01",
+          "primary_signal": "workflow",
+          "scenario": "Mixed reviewed and pending modules should be tracked with a ledger.",
+          "expected_workflow": ["review ledger", "progress summary"]
+        },
+        {
+          "case_id": "lg-hotspot-priority-01",
+          "primary_signal": "quality",
+          "scenario": "Security, transaction, and naming issues coexist; high-risk findings must come first.",
+          "expected_findings": ["security or transaction issue prioritized before style"]
+        },
+        {
+          "case_id": "lg-cross-module-risk-01",
+          "primary_signal": "quality",
+          "scenario": "Controller, service, cache, and async files together reveal one business risk.",
+          "expected_findings": ["cross-module reasoning finding"]
+        },
+        {
+          "case_id": "lg-pending-disclosure-01",
+          "primary_signal": "scope",
+          "scenario": "The benchmark intentionally contains more files than one pass should review fully.",
+          "expected_workflow": ["unfinished disclosure", "remaining review scope"]
+        },
+        {
+          "case_id": "lg-continuation-prompt-01",
+          "primary_signal": "workflow",
+          "scenario": "The first pass should end with a continuation prompt for the next batch.",
+          "expected_workflow": ["continuation prompt"]
+        },
+        {
+          "case_id": "lg-exclusion-discipline-01",
+          "primary_signal": "scope",
+          "scenario": "Workspace includes generated, non-Java, or excluded files.",
+          "expected_workflow": ["explicit exclusions with reasons"]
+        }
+      ]
+    }
+  ]
+}
