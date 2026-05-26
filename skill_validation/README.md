@@ -160,10 +160,11 @@ benchmark 結果建議拆成三組訊號，不要只看單一總 pass：
 
 - `single-file baseline`：`security-01`、`null-safety-01`、`transaction-01`、`performance-01`、`maintainability-01`
 - `single-file holdout`：`security-holdout-01`、`null-safety-holdout-01`、`transaction-holdout-01`、`performance-holdout-01`、`maintainability-holdout-01`
-- `diff / PR`：`security-diff-01`、`null-safety-diff-01`、`transaction-diff-01`、`performance-diff-01`、`maintainability-diff-01`
+- `single-file holdout` 延伸案例：`state-transition-holdout-01`、`time-boundary-holdout-01`
+- `diff / PR`：`security-diff-01`、`null-safety-diff-01`、`transaction-diff-01`、`performance-diff-01`、`maintainability-diff-01`、`cache-scope-diff-01`
 - `large-codebase`：`large-codebase-01`
 
-仍保留少數「只有 catalog 設計、尚未提供 fixture」的概念案例，例如 `sf-state-transition-01`、`sf-time-boundary-01`、`diff-cache-scope-01`、`lg-cross-module-risk-01`。這些案例不會影響目前可執行腳本，但要等真正補 fixture 後才會進入 runnable benchmark。
+仍保留少數「只有 catalog 設計、尚未提供 fixture」的概念案例，例如 `lg-cross-module-risk-01`、`lg-exclusion-discipline-01`。這些案例不會影響目前可執行腳本，但要等真正補 fixture 後才會進入 runnable benchmark。
 
 ## 建議的第一輪 runtime 執行順序
 

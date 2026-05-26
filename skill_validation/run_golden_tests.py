@@ -31,6 +31,8 @@ SINGLE_FILE_CATALOG_CASE_MAP = {
     "transaction-holdout-01": ["sf-idempotency-01"],
     "performance-holdout-01": ["sf-performance-logging-01"],
     "maintainability-holdout-01": ["sf-dto-entity-boundary-01"],
+    "state-transition-holdout-01": ["sf-state-transition-01"],
+    "time-boundary-holdout-01": ["sf-time-boundary-01"],
 }
 
 RUNTIME_ENV_KEY = "CODEX_RUNTIME_COMMAND"
@@ -1115,6 +1117,67 @@ public class UserController {
                     "expected_issue": "Request DTO、Response DTO 與 Entity 直接混用，會讓 API 邊界與資料模型耦合。",
                     "expected_evidence": "@RequestBody UserEntity return userRepository.save(user)",
                     "expected_recommendation": "改用明確的 CreateUserRequest 與 UserResponse，避免直接接收或回傳 Entity。",
+                }
+            ],
+        },
+        {
+            "golden_case_id": "state-transition-holdout-01",
+            "category": "transaction",
+            "java_file": "OrderStatusService.java",
+            "java_source": """package com.example.order;
+
+public class OrderStatusService {
+    private final OrderRepository orderRepository;
+
+    public OrderStatusService(OrderRepository orderRepository) {
+        this.orderRepository = orderRepository;
+    }
+
+    public void updateStatus(Long orderId, UpdateOrderStatusRequest request) {
+        Order order = orderRepository.findById(orderId)
+                .orElseThrow(() -> new IllegalArgumentException("order not found"));
+        order.setStatus(request.getStatus());
+        orderRepository.save(order);
+    }
+}
+""",
+            "must_not_findings": ["缺少 @Transactional", "命名規則違反"],
+            "source_rules_under_test": ["J-1"],
+            "expected_findings": [
+                {
+                    "rule_id": "J-1",
+                    "severity": "high",
+                    "expected_issue": "業務狀態直接使用 request 傳入值覆蓋，缺少目前狀態是否合法轉移的顯式校驗。",
+                    "expected_evidence": "order.setStatus(request.getStatus())",
+                    "expected_recommendation": "先檢查目前狀態是否允許轉移到目標狀態，再由集中式狀態流轉邏輯更新狀態。",
+                }
+            ],
+        },
+        {
+            "golden_case_id": "time-boundary-holdout-01",
+            "category": "time",
+            "java_file": "CampaignService.java",
+            "java_source": """package com.example.campaign;
+
+import java.time.LocalDateTime;
+
+public class CampaignService {
+    public boolean isActive(Campaign campaign) {
+        LocalDateTime now = LocalDateTime.now();
+        return !now.isBefore(campaign.getStartTime())
+                && !now.isAfter(campaign.getEndTime());
+    }
+}
+""",
+            "must_not_findings": ["SQL injection", "命名規則違反"],
+            "source_rules_under_test": ["J-10"],
+            "expected_findings": [
+                {
+                    "rule_id": "J-10",
+                    "severity": "high",
+                    "expected_issue": "時間判斷直接依賴不明確的本機 now，且結束邊界是否包含終點不清楚。",
+                    "expected_evidence": "LocalDateTime.now !now.isAfter(campaign.getEndTime())",
+                    "expected_recommendation": "改用明確業務時區與 Clock，並定義可驗證的起訖邊界，例如左閉右開 [start, end)。",
                 }
             ],
         },

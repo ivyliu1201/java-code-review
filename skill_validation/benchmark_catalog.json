@@ -1,5 +1,5 @@
 {
-  "version": 2,
+  "version": 3,
   "goal": "Validate java-code-review for large-project Java backend reviews without letting parser or golden wording redefine the runtime skill.",
   "signals": {
     "quality": "Find the intended high-risk issue with concrete evidence and without must-not findings.",
@@ -144,7 +144,24 @@
           "primary_signal": "quality",
           "scenario": "Request status directly overwrites persisted status.",
           "expected_findings": ["invalid state transition"],
-          "must_not_findings": ["controller-heavy only"]
+          "must_not_findings": ["controller-heavy only"],
+          "fixture": {
+            "golden_case_id": "state-transition-holdout-01",
+            "category": "transaction",
+            "java_file": "OrderStatusService.java",
+            "java_source": "package com.example.order;\n\npublic class OrderStatusService {\n    private final OrderRepository orderRepository;\n\n    public OrderStatusService(OrderRepository orderRepository) {\n        this.orderRepository = orderRepository;\n    }\n\n    public void updateStatus(Long orderId, UpdateOrderStatusRequest request) {\n        Order order = orderRepository.findById(orderId)\n                .orElseThrow(() -> new IllegalArgumentException(\"order not found\"));\n        order.setStatus(request.getStatus());\n        orderRepository.save(order);\n    }\n}\n",
+            "must_not_findings": ["缺少 @Transactional", "命名規則違反"],
+            "source_rules_under_test": ["J-1"],
+            "expected_findings": [
+              {
+                "rule_id": "J-1",
+                "severity": "high",
+                "expected_issue": "業務狀態直接使用 request 傳入值覆蓋，缺少目前狀態是否合法轉移的顯式校驗。",
+                "expected_evidence": "order.setStatus(request.getStatus())",
+                "expected_recommendation": "先檢查目前狀態是否允許轉移到目標狀態，再由集中式狀態流轉邏輯更新狀態。"
+              }
+            ]
+          }
         },
         {
           "case_id": "sf-dto-entity-boundary-01",
@@ -177,7 +194,24 @@
           "primary_signal": "quality",
           "scenario": "Business time logic uses local now without timezone or boundary clarity.",
           "expected_findings": ["time boundary risk"],
-          "must_not_findings": ["threading"]
+          "must_not_findings": ["threading"],
+          "fixture": {
+            "golden_case_id": "time-boundary-holdout-01",
+            "category": "time",
+            "java_file": "CampaignService.java",
+            "java_source": "package com.example.campaign;\n\nimport java.time.LocalDateTime;\n\npublic class CampaignService {\n    public boolean isActive(Campaign campaign) {\n        LocalDateTime now = LocalDateTime.now();\n        return !now.isBefore(campaign.getStartTime())\n                && !now.isAfter(campaign.getEndTime());\n    }\n}\n",
+            "must_not_findings": ["SQL injection", "命名規則違反"],
+            "source_rules_under_test": ["J-10"],
+            "expected_findings": [
+              {
+                "rule_id": "J-10",
+                "severity": "high",
+                "expected_issue": "時間判斷直接依賴不明確的本機 now，且結束邊界是否包含終點不清楚。",
+                "expected_evidence": "LocalDateTime.now !now.isAfter(campaign.getEndTime())",
+                "expected_recommendation": "改用明確業務時區與 Clock，並定義可驗證的起訖邊界，例如左閉右開 [start, end)。"
+              }
+            ]
+          }
         },
         {
           "case_id": "sf-cache-sensitive-data-01",
@@ -443,7 +477,30 @@
           "scenario": "Diff changes cache key/value logic only in one method.",
           "expected_findings": ["cache key or sensitive cache payload issue when visible"],
           "must_not_findings": ["whole-cache-layer redesign"],
-          "scope_guards": ["must stay near changed cache code"]
+          "scope_guards": ["must stay near changed cache code"],
+          "fixture": {
+            "golden_case_id": "cache-scope-diff-01",
+            "category": "security",
+            "source_rules_under_test": ["M-4"],
+            "must_not_findings": ["交易邊界錯誤", "NullPointerException 風險"],
+            "base_files": {
+              "src/main/java/com/example/cache/SessionCacheService.java": "package com.example.cache;\n\npublic class SessionCacheService {\n    public void save(UserSession session, CacheClient cacheClient) {\n        cacheClient.put(\n                \"session:\" + session.getUserId(),\n                new SessionSnapshot(session.getUserId(), maskEmail(session.getEmail())));\n    }\n\n    private String maskEmail(String email) {\n        return email == null ? null : \"****\";\n    }\n}\n",
+              "src/main/java/com/example/legacy/LegacyCheckoutService.java": "package com.example.legacy;\n\npublic class LegacyCheckoutService {\n    public void complete(CheckoutRequest request, PaymentClient paymentClient) {\n        paymentClient.charge(request.getPaymentToken(), request.getAmount());\n    }\n}\n"
+            },
+            "changed_files": {
+              "src/main/java/com/example/cache/SessionCacheService.java": "package com.example.cache;\n\npublic class SessionCacheService {\n    public void save(UserSession session, CacheClient cacheClient) {\n        cacheClient.put(\n                \"session:\" + session.getUserId(),\n                new SessionSnapshot(\n                        session.getUserId(),\n                        session.getEmail(),\n                        session.getAccessToken()));\n    }\n}\n"
+            },
+            "expected_findings": [
+              {
+                "rule_id": "M-4",
+                "severity": "high",
+                "expected_issue": "Diff 在 cache value 中直接放入完整 email 與 access token，缺少敏感資料最小化與保護。",
+                "expected_evidence": "SessionSnapshot session.getEmail session.getAccessToken",
+                "expected_recommendation": "不要把完整敏感欄位與 token 直接放進 cache，改存必要且脫敏後的資料，並保留明確 TTL/清除策略。",
+                "expected_filename": "sessioncacheservice.java"
+              }
+            ]
+          }
         },
         {
           "case_id": "diff-test-only-change-01",

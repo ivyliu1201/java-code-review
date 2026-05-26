@@ -23,6 +23,7 @@ from run_golden_tests import (
     detect_runtime_command,
     extract_filenames,
     extract_heading_section,
+    extract_rule_ids,
     gate_a_status,
     gate_c_status,
     gate_d_status,
@@ -55,6 +56,7 @@ DIFF_CATALOG_CASE_MAP = {
     "transaction-diff-01": ["diff-transaction-01"],
     "performance-diff-01": ["diff-performance-logging-01"],
     "maintainability-diff-01": ["diff-maintainability-01"],
+    "cache-scope-diff-01": ["diff-cache-scope-01"],
 }
 
 
@@ -375,6 +377,61 @@ public class UserController {
                     "expected_evidence": "@RequestBody UserEntity return userRepository.save(user)",
                     "expected_recommendation": "改用明確的 CreateUserRequest 與 UserResponse，避免直接接收或回傳 Entity。",
                     "expected_filename": "usercontroller.java",
+                }
+            ],
+        },
+        {
+            "golden_case_id": "cache-scope-diff-01",
+            "category": "security",
+            "source_rules_under_test": ["M-4"],
+            "must_not_findings": ["交易邊界錯誤", "NullPointerException 風險"],
+            "base_files": {
+                "src/main/java/com/example/cache/SessionCacheService.java": """package com.example.cache;
+
+public class SessionCacheService {
+    public void save(UserSession session, CacheClient cacheClient) {
+        cacheClient.put(
+                "session:" + session.getUserId(),
+                new SessionSnapshot(session.getUserId(), maskEmail(session.getEmail())));
+    }
+
+    private String maskEmail(String email) {
+        return email == null ? null : "****";
+    }
+}
+""",
+                "src/main/java/com/example/legacy/LegacyCheckoutService.java": """package com.example.legacy;
+
+public class LegacyCheckoutService {
+    public void complete(CheckoutRequest request, PaymentClient paymentClient) {
+        paymentClient.charge(request.getPaymentToken(), request.getAmount());
+    }
+}
+""",
+            },
+            "changed_files": {
+                "src/main/java/com/example/cache/SessionCacheService.java": """package com.example.cache;
+
+public class SessionCacheService {
+    public void save(UserSession session, CacheClient cacheClient) {
+        cacheClient.put(
+                "session:" + session.getUserId(),
+                new SessionSnapshot(
+                        session.getUserId(),
+                        session.getEmail(),
+                        session.getAccessToken()));
+    }
+}
+""",
+            },
+            "expected_findings": [
+                {
+                    "rule_id": "M-4",
+                    "severity": "high",
+                    "expected_issue": "Diff 在 cache value 中直接放入完整 email 與 access token，缺少敏感資料最小化與保護。",
+                    "expected_evidence": "SessionSnapshot session.getEmail session.getAccessToken",
+                    "expected_recommendation": "不要把完整敏感欄位與 token 直接放進 cache，改存必要且脫敏後的資料，並保留明確 TTL/清除策略。",
+                    "expected_filename": "sessioncacheservice.java",
                 }
             ],
         },
