@@ -503,27 +503,42 @@ def prepare_git_case_repo(case_workspace: Path, case: dict[str, Any]) -> tuple[l
 
 def build_prompt(case: dict[str, Any], changed_files: list[str], diff_text: str) -> str:
     rule_excerpt = case.get("rule_excerpt", "").strip()
+    compact_template = case.get("template_excerpt", "").strip()
+    compact_workflow = case.get("workflow_excerpt", "").strip()
     changed_files_text = ", ".join(changed_files)
     rule_ids_text = ", ".join(case.get("source_rules_under_test", []))
     return (
-        "請對這個 Java diff 做正式 code review。\n"
+        "請依照 java-code-review skill 與本地 Java 規則，對這個 Java diff 做正式 code review。\n"
+        "這是一個 diff benchmark。你不得要求額外輸入、不得要求擴大審查到未變更檔案、不得先回覆無法 review。\n"
+        "你只能根據此 prompt 內提供的規則摘要、模板摘要、workflow 摘要與 git diff 完成 review。\n"
+        "即使你無法讀取 workspace 或 shell，也必須直接完成 review，不可把執行環境問題當成結論。\n"
         "只審查目前 diff 中有變更的 Java 檔案，不得提到未變更檔案名稱。\n"
         f"本次 diff 中有變更的 Java 檔案只有：{changed_files_text}\n"
-        f"本 case 主要檢查的本地 rule id：{rule_ids_text}。若列出相關 finding，請盡量在 `規則` 欄標出精確 rule id。\n\n"
+        f"本 case 主要檢查的本地 rule id：{rule_ids_text}。若列出相關 finding，請盡量在 `規則` 欄標出精確 rule id。\n"
+        "要求：\n"
+        "1. 使用繁體中文。\n"
+        "2. 套用此 prompt 內嵌的本地規則摘要；這些摘要已由 references/java-rules.md 讀出。\n"
+        "3. 套用此 prompt 內嵌的模板與 workflow 摘要；這些摘要已由 references/report-templates.md 與 references/review-workflow.md 讀出。\n"
+        "4. 只 review 本次 diff 中有變更的 Java 檔案，不得把未變更檔案的既有問題混進 findings。\n"
+        "5. 以 Compact Review Mode 輸出。\n"
+        "6. 正式報告使用固定四段：`問題清單`、`審查範圍`、`開放問題`、`剩餘風險`。\n"
+        "7. 第一個 top-level heading 必須是 `問題清單`，不要先寫摘要、前言或總結。\n"
+        "8. `問題清單` 使用中文 Markdown 表格，欄位名稱固定為 `嚴重度 | 標題 | 規則 | 檔案行號 | 影響 | 修正方向`。\n"
+        "9. 不要改用 `Findings`、`問題摘要`、`Open Questions`、`位置`、`問題`、`建議` 等替代 section 名稱或表頭。\n"
+        "10. `審查範圍` 內固定包含兩行：`- 範圍: ...` 與 `- 已審查檔案: ...`。\n"
+        "11. `檔案行號` 使用純文字 `relative/path/File.java:123`，不要輸出 Markdown 連結。\n"
+        "12. `開放問題` 與 `剩餘風險` 不可合併；若沒有內容，請填 `- 無`。\n\n"
         "本地規則摘要：\n"
         f"{rule_excerpt}\n\n"
+        "Compact Review Mode workflow 摘要：\n"
+        f"{compact_workflow}\n\n"
+        "Compact 正式模板摘要：\n"
+        f"{compact_template}\n\n"
         "Git diff:\n"
         "```diff\n"
         f"{diff_text.strip()}\n"
         "```\n\n"
-        "輸出偏好：\n"
-        "- 使用繁體中文。\n"
-        "- 正式報告使用固定四段：`問題清單`、`審查範圍`、`開放問題`、`剩餘風險`。\n"
-        "- 第一個 top-level heading 必須是 `問題清單`，不要先寫摘要或前言。\n"
-        "- `問題清單` 使用中文 Markdown 表格；若有相關 finding，請盡量在 `規則` 欄標出精確 rule id。\n"
-        "- `審查範圍` 內固定包含兩行：`- 範圍: ...` 與 `- 已審查檔案: ...`。\n"
-        "- `檔案行號` 使用純文字 `relative/path/File.java:123`，不要輸出 Markdown 連結。\n"
-        "- `開放問題` 與 `剩餘風險` 不可合併；若沒有內容，請填 `- 無`。\n"
+        "請直接依上面的正式模板輸出，不要自行改寫段落名稱或表格欄位。\n"
     )
 
 
