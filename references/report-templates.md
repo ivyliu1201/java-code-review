@@ -36,18 +36,21 @@ static final int TIMEOUT_MILLIS = 5000;
 
 使用者未要求正式報告，且範圍符合 Compact Review Mode 時使用。
 
-```text
-審查範圍
-- 範圍: [檔案集合 / diff / review 範圍]
-- 已審查檔案: [file A], [file B]
+- 正式中文輸出建議固定使用四個 top-level 段落，順序為：`問題清單`、`審查範圍`、`開放問題`、`剩餘風險`。
+- `檔案行號` 建議使用純文字 `relative/path/File.java:123`，避免使用 Markdown 連結。
 
+```text
 問題清單
 | 嚴重度 | 標題 | 規則 | 檔案行號 | 影響 | 修正方向 |
 | --- | --- | --- | --- | --- | --- |
-| 嚴重 | [若無則填 無] | [rule id 或規則類別] | [file:line] | [影響] | [修正方向] |
-| 主要 | [若無則填 無] | [rule id 或規則類別] | [file:line] | [影響] | [修正方向] |
-| 次要 | [若無則填 無] | [rule id 或規則類別] | [file:line] | [影響] | [修正方向] |
-| 建議 | [若無則填 無] | [rule id 或規則類別] | [file:line] | [影響] | [修正方向] |
+| 嚴重 | [若無則填 無] | [rule id 或規則類別] | [relative/path/File.java:123] | [影響] | [修正方向] |
+| 主要 | [若無則填 無] | [rule id 或規則類別] | [relative/path/File.java:123] | [影響] | [修正方向] |
+| 次要 | [若無則填 無] | [rule id 或規則類別] | [relative/path/File.java:123] | [影響] | [修正方向] |
+| 建議 | [若無則填 無] | [rule id 或規則類別] | [relative/path/File.java:123] | [影響] | [修正方向] |
+
+審查範圍
+- 範圍: [檔案集合 / diff / review 範圍]
+- 已審查檔案: [file A], [file B]
 
 進度
 - [若已完成可省略；若未完成，列出已 review / 尚未 review / 下一步]
@@ -63,18 +66,22 @@ static final int TIMEOUT_MILLIS = 5000;
 
 啟用 Compact Review Mode 且使用者要求正式審查報告時使用。保留所有欄位；無內容時填 `無`。
 
-```text
-審查範圍
-- 範圍: [檔案集合 / diff / 小範圍目標]
-- 已審查檔案: [file A], [file B]
+- 正式中文輸出固定使用四個 top-level 段落，順序為：`問題清單`、`審查範圍`、`開放問題`、`剩餘風險`。
+- `檔案行號` 使用純文字 `relative/path/File.java:123`，不要使用 Markdown 連結。
+- `開放問題` 與 `剩餘風險` 不可合併成同一段。
 
+```text
 問題清單
 | 嚴重度 | 標題 | 規則 | 檔案行號 | 影響 | 修正方向 |
 | --- | --- | --- | --- | --- | --- |
-| 嚴重 | [標題或無] | [rule id 或規則類別] | [file:line] | [用一到兩句說明影響] | [簡短替代寫法或修正方向] |
-| 主要 | [標題或無] | [rule id 或規則類別] | [file:line] | [用一到兩句說明影響] | [簡短替代寫法或修正方向] |
-| 次要 | [標題或無] | [rule id 或規則類別] | [file:line] | [用一到兩句說明影響] | [簡短替代寫法或修正方向] |
-| 建議 | [標題或無] | [rule id 或規則類別] | [file:line] | [用一到兩句說明影響] | [簡短替代寫法或修正方向] |
+| 嚴重 | [標題或無] | [rule id 或規則類別] | [relative/path/File.java:123] | [用一到兩句說明影響] | [簡短替代寫法或修正方向] |
+| 主要 | [標題或無] | [rule id 或規則類別] | [relative/path/File.java:123] | [用一到兩句說明影響] | [簡短替代寫法或修正方向] |
+| 次要 | [標題或無] | [rule id 或規則類別] | [relative/path/File.java:123] | [用一到兩句說明影響] | [簡短替代寫法或修正方向] |
+| 建議 | [標題或無] | [rule id 或規則類別] | [relative/path/File.java:123] | [用一到兩句說明影響] | [簡短替代寫法或修正方向] |
+
+審查範圍
+- 範圍: [檔案集合 / diff / 小範圍目標]
+- 已審查檔案: [file A], [file B]
 
 開放問題
 - [問題；若無則填 無]

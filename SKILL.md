@@ -59,8 +59,9 @@ description: 當使用者要求依照本地 Java 規範進行 code review、命�
 - 先列 findings，再補審查範圍、進度、開放問題與剩餘風險。
 - findings 應依嚴重度分類，並在可能時附 rule id、檔案、行號、影響與修正方向。
 - 正式報告與預設中文輸出時，`問題清單` 優先使用 Markdown 表格呈現。
-- `問題清單` 表格建議欄位為 `嚴重度 | 標題 | 規則 | 檔案行號 | 影響 | 修正方向`。
-- Compact Review Mode 至少要交代 review scope 與 reviewed files。
+- 正式報告與預設中文輸出時，Compact Review Mode 的 top-level 段落順序固定為：`問題清單`、`審查範圍`、`開放問題`、`剩餘風險`。
+- `問題清單` 表格建議欄位為 `嚴重度 | 標題 | 規則 | 檔案行號 | 影響 | 修正方向`，其中 `檔案行號` 優先使用純文字 `relative/path/File.java:123`。
+- Compact Review Mode 至少要交代 review scope 與 reviewed files，並在 `審查範圍` 中明確列出 `- 範圍: ...` 與 `- 已審查檔案: ...`。
 - Large Codebase Review Mode 必須交代 scope、inventory 摘要、review ledger、目前批次與整體進度。
 - 如果尚未 review 完所有檔案，必須明確寫出未完成狀態，不可暗示全面完成。
 - 若使用者指定輸出格式或只要求特定嚴重度，盡量配合；但不得違反 mode 必要資訊與未完成狀態揭露要求。

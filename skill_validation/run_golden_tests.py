@@ -456,6 +456,35 @@ def first_content_line_is_problem_list(stdout: str) -> bool:
     return False
 
 
+def extract_top_level_section_bodies(stdout: str) -> dict[str, list[str]]:
+    bodies: dict[str, list[str]] = {}
+    current_section: str | None = None
+    for raw_line in normalize_runtime_text(stdout).splitlines():
+        line = raw_line.strip()
+        if not line:
+            continue
+        heading = normalize_heading_token(line)
+        matched_section: str | None = None
+        for aliases in OUTPUT_SECTION_TITLES:
+            if heading in aliases:
+                matched_section = aliases[0]
+                break
+        if matched_section is not None:
+            current_section = matched_section
+            bodies.setdefault(current_section, [])
+            continue
+        if current_section is not None:
+            bodies.setdefault(current_section, []).append(line)
+    return bodies
+
+
+def scope_section_has_required_lines(stdout: str) -> bool:
+    scope_lines = extract_top_level_section_bodies(stdout).get("審查範圍", [])
+    has_scope = any("範圍:" in line for line in scope_lines)
+    has_reviewed_files = any("已審查檔案:" in line for line in scope_lines)
+    return has_scope and has_reviewed_files
+
+
 def has_no_forbidden_sections(stdout: str) -> bool:
     return True
 
@@ -683,20 +712,20 @@ def parse_actual_findings(stdout: str) -> list[dict[str, Any]]:
 
 def is_template_compliant(stdout: str) -> bool:
     return (
-        has_required_sections(stdout, OUTPUT_SECTION_TITLES)
+        first_content_line_is_problem_list(stdout)
+        and has_required_sections(stdout, OUTPUT_SECTION_TITLES)
+        and has_required_section_order(stdout)
         and has_required_finding_table_header(stdout)
         and finding_table_uses_chinese_severity(stdout)
     )
 
 
 def is_workflow_compliant(stdout: str) -> bool:
-    required_terms = (
-        ("審查範圍",),
-        ("已審查檔案",),
-        ("開放問題",),
-        ("剩餘風險", "殘餘風險"),
+    return (
+        has_required_sections(stdout, OUTPUT_SECTION_TITLES)
+        and has_required_section_order(stdout)
+        and scope_section_has_required_lines(stdout)
     )
-    return has_required_sections(stdout, required_terms)
 
 
 def compare_finding(expected: dict[str, Any], actual: dict[str, Any]) -> tuple[bool, str]:
@@ -1211,8 +1240,13 @@ def build_prompt(case: dict[str, Any], relative_java_path: str) -> str:
         "5. 請附檔案與行號，檔案只使用提供的路徑。\n"
         "6. 只 review 這一個檔案，不得引用或審查其他 Java 檔案。\n"
         "7. 以 Compact Review Mode 輸出。\n"
-        "8. 正式報告優先使用中文表格；若有相關 finding，請盡量在規則欄標出精確 rule id。\n"
-        f"9. 只 review 這個檔案：{relative_java_path}\n\n"
+        "8. 正式報告使用固定四段：`問題清單`、`審查範圍`、`開放問題`、`剩餘風險`。\n"
+        "9. 第一個 top-level heading 必須是 `問題清單`，不要先寫摘要或前言。\n"
+        "10. `問題清單` 使用中文 Markdown 表格，若有相關 finding，請盡量在規則欄標出精確 rule id。\n"
+        "11. `審查範圍` 內固定包含兩行：`- 範圍: ...` 與 `- 已審查檔案: ...`。\n"
+        "12. `檔案行號` 使用純文字 `relative/path/File.java:123`，不要輸出 Markdown 連結。\n"
+        "13. `開放問題` 與 `剩餘風險` 不可合併；若沒有內容，請填 `- 無`。\n"
+        f"14. 只 review 這個檔案：{relative_java_path}\n\n"
         "本地規則摘要：\n"
         f"{rule_excerpt}\n\n"
         "Compact Review Mode workflow 摘要：\n"
