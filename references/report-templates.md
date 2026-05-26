@@ -14,16 +14,16 @@
 使用直接、可定位問題類型的 finding 標題，例如：
 
 - `命名規則違反`
-- `常數規則違反`
-- `package/class/method 命名不一致`
-- `布林命名不一致`
-- `magic value 應改為常數或 enum`
+- `敏感資料直接輸出`
+- `交易邊界不正確`
+- `Controller 直接承載核心業務邏輯`
+- `缺少冪等保護`
 
 建議描述方式：
 
-- `違反本地規則 A-1，因為識別字以 '_' 結尾`
 - `違反本地規則 A-5，因為 static final 常數未使用全大寫底線命名`
-- `違反本地規則 A-10，因為 status 值以 magic number 表示`
+- `違反本地規則 H-2，因為 API 直接回傳完整敏感欄位`
+- `違反本地規則 L-1，因為在本地交易內直接呼叫外部系統`
 
 如果修法很直接，可附上短版替代範例：
 
@@ -37,127 +37,103 @@ static final int TIMEOUT_MILLIS = 5000;
 使用者未要求正式報告，且範圍符合 Compact Review Mode 時使用。
 
 ```text
-Review Scope
-- Scope: [檔案集合 / diff / review 範圍]
-- Reviewed files: [file A], [file B]
+審查範圍
+- 範圍: [檔案集合 / diff / review 範圍]
+- 已審查檔案: [file A], [file B]
 
-Findings
-Critical
-- [...]
+問題清單
+| 嚴重度 | 標題 | 規則 | 檔案行號 | 影響 | 修正方向 |
+| --- | --- | --- | --- | --- | --- |
+| 嚴重 | [若無則填 無] | [rule id 或規則類別] | [file:line] | [影響] | [修正方向] |
+| 主要 | [若無則填 無] | [rule id 或規則類別] | [file:line] | [影響] | [修正方向] |
+| 次要 | [若無則填 無] | [rule id 或規則類別] | [file:line] | [影響] | [修正方向] |
+| 建議 | [若無則填 無] | [rule id 或規則類別] | [file:line] | [影響] | [修正方向] |
 
-Major
-- [...]
-
-Minor
-- [...]
-
-Suggestions
-- [...]
-
-Progress
+進度
 - [若已完成可省略；若未完成，列出已 review / 尚未 review / 下一步]
 
-Open questions
-- [問題；若無則可填 None]
+開放問題
+- [問題；若無則可填 無]
 
-Residual risks
-- [風險；若無則可填 None]
+剩餘風險
+- [風險；若無則可填 無]
 ```
 
 ## Compact 正式 Review 模板
 
-啟用 Compact Review Mode 且使用者要求正式審查報告時使用。保留所有欄位；無內容時填 `None`。
+啟用 Compact Review Mode 且使用者要求正式審查報告時使用。保留所有欄位；無內容時填 `無`。
 
 ```text
-Review Scope
-- Scope: [檔案集合 / diff / 小範圍目標]
-- Reviewed files: [file A], [file B]
+審查範圍
+- 範圍: [檔案集合 / diff / 小範圍目標]
+- 已審查檔案: [file A], [file B]
 
-Findings
-Critical
-1. [標題] - [file:line]
-Rule: [rule id 或規則類別]
-Why: [影響]
-Suggested fix: [修正方向]
+問題清單
+| 嚴重度 | 標題 | 規則 | 檔案行號 | 影響 | 修正方向 |
+| --- | --- | --- | --- | --- | --- |
+| 嚴重 | [標題或無] | [rule id 或規則類別] | [file:line] | [用一到兩句說明影響] | [簡短替代寫法或修正方向] |
+| 主要 | [標題或無] | [rule id 或規則類別] | [file:line] | [用一到兩句說明影響] | [簡短替代寫法或修正方向] |
+| 次要 | [標題或無] | [rule id 或規則類別] | [file:line] | [用一到兩句說明影響] | [簡短替代寫法或修正方向] |
+| 建議 | [標題或無] | [rule id 或規則類別] | [file:line] | [用一到兩句說明影響] | [簡短替代寫法或修正方向] |
 
-Major
-1. [...]
+開放問題
+- [問題；若無則填 無]
 
-Minor
-1. [...]
-
-Suggestions
-1. [...]
-
-Open questions
-- [問題；若無則填 None]
-
-Residual risks
-- [風險；若無則填 None]
+剩餘風險
+- [風險；若無則填 無]
 ```
 
 ## Large Codebase Review Mode 模板
 
-啟用 Large Codebase Review Mode 時一律使用。保留 `Review Scope`、`Current Batch`、`Review ledger`、`Batch summary`、依嚴重度分類的 findings、`Progress`、`Open questions`、`Residual risks` 與 `Continuation prompt`。
-
-`High priority findings` 只放 Critical 與 Major 摘要；完整內容放在 `Detailed findings`。
+啟用 Large Codebase Review Mode 時一律使用。保留 `審查範圍`、`目前批次`、`審查台帳`、`批次摘要`、依嚴重度分類的 findings、`進度`、`開放問題`、`剩餘風險` 與 `續跑提示`。
 
 ```text
-Review Scope
-- Scope: [資料夾 / staged changes / 檔案集合]
-- Total Java files: [總數]
+審查範圍
+- 範圍: [資料夾 / staged changes / 檔案集合]
+- Java 檔案總數: [總數]
 - Inventory order: [排序方式，例如 path asc]
 - File inventory: [完整清單或編號範圍]
 - Excluded: [排除項目與理由]
 - Batch plan: [例如 1/4, 2/4, 3/4, 4/4]
 
-Current Batch
+目前批次
 - Batch: [第幾批 / 共幾批]
 - Reviewed files: [file A], [file B]
 
-Review ledger
+審查台帳
 - Reviewed: [清單]
 - Pending: [清單]
 - Excluded: [清單與理由]
 
-Batch summary
+批次摘要
 - [本批摘要]
 - [高優先問題摘要]
 
-High priority findings
-Critical
-1. [finding 編號或標題] - [一句話摘要，完整內容見 Detailed findings]
+高優先問題
+| 嚴重度 | 標題 | 檔案行號 | 一句話摘要 |
+| --- | --- | --- | --- |
+| 嚴重 | [finding 編號或標題] | [file:line] | [一句話摘要] |
+| 主要 | [finding 編號或標題] | [file:line] | [一句話摘要] |
 
-Major
-1. [finding 編號或標題] - [一句話摘要，完整內容見 Detailed findings]
+詳細問題
+| 嚴重度 | 標題 | 規則 | 檔案行號 | 影響 | 修正方向 |
+| --- | --- | --- | --- | --- | --- |
+| 嚴重 | [標題或無] | [rule id 或規則類別] | [file:line] | [用一到兩句說明影響] | [簡短替代寫法或修正方向] |
+| 主要 | [標題或無] | [rule id 或規則類別] | [file:line] | [用一到兩句說明影響] | [簡短替代寫法或修正方向] |
+| 次要 | [標題或無] | [rule id 或規則類別] | [file:line] | [用一到兩句說明影響] | [簡短替代寫法或修正方向] |
+| 建議 | [標題或無] | [rule id 或規則類別] | [file:line] | [用一到兩句說明影響] | [簡短替代寫法或修正方向] |
 
-Detailed findings
-Critical
-1. [標題] - [file:line]
-Rule: [rule id 或規則類別]
-Why: [用一到兩句說明影響]
-Suggested fix: [簡短替代寫法或修正方向]
-
-Major
-1. [...]
-
-Minor
-1. [...]
-
-Suggestions
-1. [...]
-
-Progress
+進度
 - Reviewed so far: [已 review 檔案或數量]
 - Remaining: [尚未 review 檔案或下一批起點]
 - Next output: [若內容過長，依同批次分 part 續出]
 
-Open questions
-- [問題；若無則填 None]
+開放問題
+- [問題；若無則填 無]
 
-Residual risks
-- [風險；若無則填 None]
+剩餘風險
+- [風險；若無則填 無]
 
-Continuation prompt
+續跑提示
 - [提供可直接續跑的 prompt]
 ```

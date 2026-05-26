@@ -6,9 +6,10 @@
 
 - `SKILL.md` 保留核心入口規則，讓 Codex 觸發 skill 後快速掌握必做事項。
 - 完整 Java 規範放在 `references/java-rules.md`，審查、產碼或重構前必須以 UTF-8 讀取。
+- `references/java-rule-index.md` 提供大型規則檔的快速索引，但不取代正式規則原文。
 - 大型 codebase review 的 inventory、batch、ledger 與完成條件放在 `references/review-workflow.md`。
 - Review 報告模板與 finding 標題範例放在 `references/report-templates.md`。
-- 預設以繁體中文輸出審查報告。
+- 預設以繁體中文輸出審查報告，正式報告優先使用中文表格。
 
 ## 功能
 
@@ -26,8 +27,14 @@
 ├── SKILL.md
 ├── agents/
 │   └── openai.yaml
+├── skill_validation/
+│   ├── validate_skill.py
+│   ├── run_golden_tests.py
+│   ├── run_diff_golden_tests.py
+│   └── README*.md
 └── references/
     ├── java-rules.md
+    ├── java-rule-index.md
     ├── report-templates.md
     └── review-workflow.md
 ```
@@ -35,8 +42,10 @@
 - `SKILL.md`：skill 入口規則、觸發後的必做要求、審查原則與 reference 導覽。
 - `agents/openai.yaml`：OpenAI agent 顯示名稱、簡短描述與預設 prompt。
 - `references/java-rules.md`：完整 Java 本地規則，審查與產碼前必讀。
+- `references/java-rule-index.md`：大型規則檔快速索引，方便先定位再回原文確認。
 - `references/review-workflow.md`：大型審查流程、批次規則、完成條件與 final summary 要求。
 - `references/report-templates.md`：一般 review、Compact 正式 review、Large Codebase Review Mode 的輸出模板。
+- `skill_validation/`：測試與 benchmark 腳本。這些腳本是驗證工具，不是 skill runtime 規格來源。
 
 ## 安裝
 
@@ -90,10 +99,8 @@ Use $java-code-review to review this Java change against the local Java rules.
 
 ## 嚴重度
 
-- `Critical`：明確的正確性、安全性、資料損壞、交易流程錯誤，或高機率 production 事故風險。
-- `Major`：明確規則違反、邏輯脆弱、可維護性重大缺陷，或高風險但未必立即造成事故的問題。
-- `Minor`：一致性、命名、可讀性、結構細節等非關鍵問題。
-- `Suggestions`：非必要但合理的改善建議。
+- 中文正式報告預設使用 `嚴重`、`主要`、`次要`、`建議`。
+- 使用者要求英文時，可改用 `Critical`、`Major`、`Minor`、`Suggestions`。
 
 ## 規則來源
 
@@ -119,6 +126,17 @@ python C:\Users\fanny\.codex\skills\.system\skill-creator\scripts\quick_validate
 ```text
 Skill is valid!
 ```
+
+若要保留腳本測試，建議把測試分成三層，並讓它們與 skill runtime 規格分離：
+
+1. `Single-file rule benchmark`
+   驗證單一規則是否能穩定命中。
+2. `Diff / PR scope benchmark`
+   驗證只評論變更範圍、避免把未變更檔案混進 findings。
+3. `Large-codebase workflow benchmark`
+   驗證 inventory、batch、ledger、進度與續跑提示。
+
+測試腳本可以存在 `skill_validation/`，但不要再把 golden prompt 或 parser 契約直接寫回 `SKILL.md`。
 
 ## 注意事項
 

@@ -16,7 +16,7 @@
 
 當範圍超過 5 個 Java 檔、整個資料夾、staged changes、壓縮包、多檔混合輸入，或任何無法一次完整審查的範圍時，使用 Large Codebase Review Mode。
 
-輸出 findings 前，先完成以下事項：
+輸出 `問題清單` 前，先完成以下事項：
 
 1. 建立 Java file inventory。
 2. 使用穩定順序排序檔案，建議依 path ascending。
@@ -26,7 +26,7 @@
 
 Inventory 至少包含：
 
-- Review scope
+- 審查範圍
 - Java 檔案總數
 - 完整 Java 檔案清單
 - 排除項目與理由
@@ -38,12 +38,12 @@ Large Codebase Review Mode 的每個批次都必須包含：
 
 - 目前批次編號
 - 本批已審查檔案
-- Review ledger
-- 依 `Critical`、`Major`、`Minor`、`Suggestions` 分類的 findings
+- 審查台帳
+- 依嚴重度分類的 `問題清單`
 - 進度與剩餘檔案
-- Open questions
-- Residual risks
-- 未完成時的 continuation prompt
+- 開放問題
+- 剩餘風險
+- 未完成時的續跑提示
 
 不可把多個批次混成一份界線不明的報告。如果單一批次報告太長，可拆成 `Part 1`、`Part 2` 等段落，但必須保留同一個批次編號。
 
@@ -61,6 +61,6 @@ Large Codebase Review Mode 的每個批次都必須包含：
 
 - Java 檔案總數
 - 已審查 Java 檔案數
-- `Critical`、`Major`、`Minor`、`Suggestions` 數量統計
+- 各嚴重度數量統計
 - 最高風險檔案
 - Top priority fixes

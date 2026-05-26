@@ -25,6 +25,7 @@ description: 當使用者要求依照本地 Java 規範進行 code review、命�
 - 如果 `references/java-rules.md` 無法讀取、讀取失敗或內容不完整，不得宣稱已套用本地規則。
 - 發生讀取失敗時，必須明確說明目前無法依本地規則完成正式審查或正式產碼。
 - 若使用者仍要求繼續，可改以通用 Java 慣例進行暫時性審查或產碼，但必須明確標示「未套用本地規則」，且不得宣稱結果符合本地 Java 規範。
+- `references/java-rule-index.md` 可作為大型規則檔的快速索引，但不取代 `references/java-rules.md` 原文。
 
 ## 審查原則
 
@@ -34,33 +35,41 @@ description: 當使用者要求依照本地 Java 規範進行 code review、命�
 4. 若輸入內容包含檔案路徑、diff line 或可定位行號，finding 必須附上檔案與行號。
 5. 單一 finding 預設使用精簡格式，只保留標題、規則、檔案行號、影響與修正方向。
 6. finding 必須有具體依據，不可只憑偏好硬列問題。
-7. 缺少必要上下文時，不可把推測當成確定 finding；應改列為 `Open Questions` 或 `Residual Risks`。
+7. 缺少必要上下文時，不可把推測當成確定 finding；應改列為開放問題、假設或剩餘風險。
 8. 如果沒有發現問題，要明確寫出沒有 findings，並補充剩餘風險或測試缺口。
 
-## 嚴重度
+## 嚴重度與輸出語言
 
-- `Critical`: 明確的正確性、安全性、資料損壞、交易流程錯誤，或高機率 production 事故風險。
-- `Major`: 明確規則違反、邏輯脆弱、可維護性重大缺陷，或高風險但未必立即造成事故的問題。
-- `Minor`: 一致性、命名、可讀性、結構細節等非關鍵問題。
-- `Suggestions`: 非必要但合理的改善建議。
+- 預設以繁體中文輸出；使用者要求英文時，改用英文。
+- 正式報告預設以中文表格呈現 findings。
+- 嚴重度應與輸出語言一致，並保持由高到低的穩定排序。
+- 中文使用 `嚴重`、`主要`、`次要`、`建議`。
+- 英文可使用 `Critical`、`Major`、`Minor`、`Suggestions`。
+- `java-rules.md` 標示為 `Must` 的規則，預設至少列為高風險層級；涉及安全、金額、資料一致性、交易、權限或 production 事故風險時，應提升到最高層級。
+- `java-rules.md` 標示為 `Should` 的規則，預設列為次高或改善建議；若上下文顯示實際 production 風險，可提升嚴重度。
 
 ## 審查模式
 
 - 使用 Compact Review Mode：Java 檔案數小於等於 5，且所有 diff 或檔案內容可在單次 context 中完整審查。
 - 使用 Large Codebase Review Mode：超過 5 個 Java 檔、整個資料夾、staged changes、壓縮包、多檔混合來源，或任何無法一次完整審查的範圍。
-- Large Codebase Review Mode 必須先建立 Java file inventory，固定排序，分批 review；除非使用者明確允許抽樣，否則不可抽樣、不可跳檔、不可只挑重點檔案看。
-- 只有在 inventory 中每個 Java 檔都已完成 review，才可宣稱全部 review 完成。
-- 需要詳細 batch、ledger、完成條件或 final summary 規則時，讀取 `references/review-workflow.md`。
+- 啟用 Large Codebase Review Mode 時，必須讀取 `references/review-workflow.md`，並依 inventory、batch、ledger 與 completion rule 執行。
 
-## 回應契約
+## 回應原則
 
-- 先列 findings，再列摘要或變更說明。
-- 依 `Critical`、`Major`、`Minor`、`Suggestions` 分類輸出；沒有問題的嚴重度要標示 `None` 或等價說法。
+- 先列 findings，再補審查範圍、進度、開放問題與剩餘風險。
+- findings 應依嚴重度分類，並在可能時附 rule id、檔案、行號、影響與修正方向。
+- 正式報告與預設中文輸出時，`問題清單` 優先使用 Markdown 表格呈現。
+- `問題清單` 表格建議欄位為 `嚴重度 | 標題 | 規則 | 檔案行號 | 影響 | 修正方向`。
 - Compact Review Mode 至少要交代 review scope 與 reviewed files。
 - Large Codebase Review Mode 必須交代 scope、inventory 摘要、review ledger、目前批次與整體進度。
 - 如果尚未 review 完所有檔案，必須明確寫出未完成狀態，不可暗示全面完成。
 - 若使用者指定輸出格式或只要求特定嚴重度，盡量配合；但不得違反 mode 必要資訊與未完成狀態揭露要求。
 - 需要正式模板、finding 標題範例或 Large Codebase Review Mode 輸出格式時，讀取 `references/report-templates.md`。
+
+## Diff / PR 審查契約
+
+- 使用者要求 review diff、PR、staged changes 或 git 變更時，預設只審查本次 diff 中有變更的 Java 檔案與變更行附近必要上下文。
+- 不要把未變更檔案的既有問題混進本次 findings；若未變更檔案影響判斷，可在開放問題或剩餘風險中保守說明。
 
 ## 產碼契約
 
@@ -77,5 +86,6 @@ description: 當使用者要求依照本地 Java 規範進行 code review、命�
 ## 參考文件
 
 - 完整 Java 規則：`references/java-rules.md`
+- Java 規則索引：`references/java-rule-index.md`
 - 大型程式碼審查流程：`references/review-workflow.md`
 - 審查報告模板：`references/report-templates.md`
