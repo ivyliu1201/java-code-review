@@ -463,8 +463,8 @@ def run(args: argparse.Namespace) -> int:
             "benchmark_results_absolute": str((output_dir / "large_benchmark_results.jsonl").resolve()),
             "benchmark_summary_relative": relative_to_root(output_dir / "large_benchmark_summary.json", skill_root),
             "benchmark_summary_absolute": str((output_dir / "large_benchmark_summary.json").resolve()),
-            "readme_relative": relative_to_root(skill_root / "skill_validation" / "README_large_benchmark.md", skill_root),
-            "readme_absolute": str((skill_root / "skill_validation" / "README_large_benchmark.md").resolve()),
+            "readme_relative": relative_to_root(skill_root / "scripts" / "README_large_benchmark.md", skill_root),
+            "readme_absolute": str((skill_root / "scripts" / "README_large_benchmark.md").resolve()),
         },
         "notes": manifest_notes + catalog_notes + runtime_notes + result.get("workflow_issues", []),
     }

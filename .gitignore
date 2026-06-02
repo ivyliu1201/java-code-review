@@ -1,4 +1,4 @@
-skill_validation/__pycache__/
-skill_validation/diff_cases/
-skill_validation/golden_cases/
-skill_validation/results/
+scripts/__pycache__/
+scripts/diff_cases/
+scripts/golden_cases/
+scripts/results/

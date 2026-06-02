@@ -1085,7 +1085,7 @@ def run(args: argparse.Namespace) -> int:
     skill_root = resolve_skill_root(Path(args.skill_root))
     output_dir = (skill_root / args.output_dir).resolve() if not Path(args.output_dir).is_absolute() else Path(args.output_dir).resolve()
     output_dir.mkdir(parents=True, exist_ok=True)
-    diff_cases_dir = (skill_root / "skill_validation" / "diff_cases").resolve()
+    diff_cases_dir = (skill_root / "scripts" / "diff_cases").resolve()
     diff_cases_dir.mkdir(parents=True, exist_ok=True)
     case_workspaces_dir = (output_dir / "case_workspaces").resolve()
     case_workspaces_dir.mkdir(parents=True, exist_ok=True)
@@ -1192,7 +1192,7 @@ def run(args: argparse.Namespace) -> int:
     golden_results_path = output_dir / "golden_results.jsonl"
     summary_path = output_dir / "golden_summary.json"
     manifest_path = output_dir / "spec_source_manifest.json"
-    readme_path = (skill_root / "skill_validation" / "README_diff_golden.md").resolve()
+    readme_path = (skill_root / "scripts" / "README_diff_golden.md").resolve()
 
     gate_a, gate_a_notes = gate_a_status(source_manifest, manifest_notes)
     gate_b, gate_b_notes = gate_b_status(cases, rule_sections)

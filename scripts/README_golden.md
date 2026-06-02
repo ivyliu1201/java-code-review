@@ -9,7 +9,7 @@
 ## 目錄結構
 
 ```text
-skill_validation/
+scripts/
 ├─ README_golden.md
 ├─ run_golden_tests.py
 ├─ golden_cases/
@@ -24,19 +24,19 @@ skill_validation/
 ## 本機重跑
 
 ```bash
-python skill_validation/run_golden_tests.py --skill-root . --output-dir skill_validation/results/golden_tests --validation-mode auto
+python scripts/run_golden_tests.py --skill-root . --output-dir scripts/results/golden_tests --validation-mode auto
 ```
 
 若要跑 holdout 驗收集，改用：
 
 ```bash
-python skill_validation/run_golden_tests.py --skill-root . --output-dir skill_validation/results/holdout_tests --case-set holdout --validation-mode auto
+python scripts/run_golden_tests.py --skill-root . --output-dir scripts/results/holdout_tests --case-set holdout --validation-mode auto
 ```
 
 ## 指定 skill 根目錄與輸出目錄
 
 ```bash
-python skill_validation/run_golden_tests.py --skill-root C:\path\to\skill --output-dir C:\path\to\output --validation-mode auto
+python scripts/run_golden_tests.py --skill-root C:\path\to\skill --output-dir C:\path\to\output --validation-mode auto
 ```
 
 `--skill-root` 預設使用目前工作目錄；若目前目錄不是 skill 根目錄，腳本會依 prompt 規則 fallback。

@@ -28,7 +28,7 @@
 ├── SKILL.md
 ├── agents/
 │   └── openai.yaml
-├── skill_validation/
+├── scripts/
 │   ├── benchmark_catalog.json
 │   ├── STATUS_REPORT_2026-05-26.md
 │   ├── validate_skill.py
@@ -50,10 +50,10 @@
 - `references/java-rule-index.md`：大型規則檔快速索引，方便先定位再回原文確認。
 - `references/review-workflow.md`：大型審查流程、批次規則、完成條件與 final summary 要求。
 - `references/report-templates.md`：一般 review、Compact 正式 review、Large Codebase Review Mode 的輸出模板。
-- `skill_validation/`：測試與 benchmark 腳本。這些腳本是驗證工具，不是 skill runtime 規格來源。
-- `skill_validation/benchmark_catalog.json`：single-file、diff 與 large-codebase benchmark 的結構化案例來源。
-- `skill_validation/STATUS_REPORT_2026-05-26.md`：當時階段性整理與 coverage audit 的歷史快照。
-- `skill_validation/demo_small_project/`：展示 skill 使用者可見報告的最小 Java 專案。
+- `scripts/`：測試與 benchmark 腳本。這些腳本是驗證工具，不是 skill runtime 規格來源。
+- `scripts/benchmark_catalog.json`：single-file、diff 與 large-codebase benchmark 的結構化案例來源。
+- `scripts/STATUS_REPORT_2026-05-26.md`：當時階段性整理與 coverage audit 的歷史快照。
+- `scripts/demo_small_project/`：展示 skill 使用者可見報告的最小 Java 專案。
 
 ## 安裝
 
@@ -144,7 +144,7 @@ Skill is valid!
 3. `Large-codebase workflow benchmark`
    驗證 inventory、batch、ledger、進度與續跑提示。
 
-測試腳本可以存在 `skill_validation/`，但不要再把 golden prompt 或 parser 契約直接寫回 `SKILL.md`。
+測試腳本可以存在 `scripts/`，但不要再把 golden prompt 或 parser 契約直接寫回 `SKILL.md`。
 
 ## 注意事項
 

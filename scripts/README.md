@@ -4,7 +4,7 @@
 
 注意：
 
-- `skill_validation/` 是測試與 benchmark harness，不是 skill runtime 規格來源。
+- `scripts/` 是測試與 benchmark harness，不是 skill runtime 規格來源。
 - `SKILL.md`、`references/java-rules.md`、`references/report-templates.md`、`references/review-workflow.md` 才是 skill 本體應遵循的來源。
 - 調整 benchmark 時，不要把 parser、golden prompt 或單次測試需求反向寫回 `SKILL.md`。
 
@@ -15,7 +15,7 @@
 ## 目錄結構
 
 ```text
-skill_validation/
+scripts/
 ├─ BENCHMARK_DESIGN.md
 ├─ benchmark_catalog.json
 ├─ STATUS_REPORT_2026-05-26.md
@@ -38,21 +38,21 @@ skill_validation/
 ## 本機重跑
 
 ```bash
-python skill_validation/validate_skill.py --skill-root . --output-dir skill_validation/results/spec_validation --validation-mode auto
+python scripts/validate_skill.py --skill-root . --output-dir scripts/results/spec_validation --validation-mode auto
 ```
 
 若要執行 benchmark：
 
 ```bash
-python skill_validation/run_golden_tests.py --skill-root . --output-dir skill_validation/results/golden_tests --validation-mode auto
-python skill_validation/run_diff_golden_tests.py --skill-root . --output-dir skill_validation/results/diff_golden_tests --validation-mode auto
-python skill_validation/run_large_codebase_benchmarks.py --skill-root . --output-dir skill_validation/results/large_codebase_benchmarks --validation-mode auto
+python scripts/run_golden_tests.py --skill-root . --output-dir scripts/results/golden_tests --validation-mode auto
+python scripts/run_diff_golden_tests.py --skill-root . --output-dir scripts/results/diff_golden_tests --validation-mode auto
+python scripts/run_large_codebase_benchmarks.py --skill-root . --output-dir scripts/results/large_codebase_benchmarks --validation-mode auto
 ```
 
 ## 指定 skill 根目錄與輸出目錄
 
 ```bash
-python skill_validation/validate_skill.py --skill-root C:\path\to\skill --output-dir C:\path\to\output --validation-mode auto
+python scripts/validate_skill.py --skill-root C:\path\to\skill --output-dir C:\path\to\output --validation-mode auto
 ```
 
 `--skill-root` 預設使用目前工作目錄；若目前目錄不是 skill 根目錄，腳本會依驗證 prompt 的規則嘗試 fallback。
@@ -160,9 +160,9 @@ benchmark 結果建議拆成三組訊號，不要只看單一總 pass：
 
 ## Case 設計來源
 
-- [BENCHMARK_DESIGN.md](/C:/Users/fanny/.codex/skills/java-code-review/skill_validation/BENCHMARK_DESIGN.md:1)
+- [BENCHMARK_DESIGN.md](/C:/Users/fanny/.codex/skills/java-code-review/scripts/BENCHMARK_DESIGN.md:1)
   - 給人閱讀的 benchmark 分層與案例設計原則。
-- [benchmark_catalog.json](/C:/Users/fanny/.codex/skills/java-code-review/skill_validation/benchmark_catalog.json:1)
+- [benchmark_catalog.json](/C:/Users/fanny/.codex/skills/java-code-review/scripts/benchmark_catalog.json:1)
   - 給後續腳本使用的結構化 case catalog。
 
 目前已經改成由 catalog 驅動的可執行案例：

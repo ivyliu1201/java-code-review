@@ -5,13 +5,13 @@
 ## 本機重跑
 
 ```bash
-python skill_validation/run_diff_golden_tests.py --skill-root . --output-dir skill_validation/results/diff_golden_tests --validation-mode auto
+python scripts/run_diff_golden_tests.py --skill-root . --output-dir scripts/results/diff_golden_tests --validation-mode auto
 ```
 
 若只想重跑特定 diff case，可重複帶入 `--case-id`：
 
 ```bash
-python skill_validation/run_diff_golden_tests.py --skill-root . --output-dir skill_validation/results/diff_golden_tests --validation-mode auto --case-id test-only-change-diff-01 --case-id multi-file-order-diff-01
+python scripts/run_diff_golden_tests.py --skill-root . --output-dir scripts/results/diff_golden_tests --validation-mode auto --case-id test-only-change-diff-01 --case-id multi-file-order-diff-01
 ```
 
 若要啟用 runtime validation，請設定 `CODEX_RUNTIME_COMMAND`，例如：

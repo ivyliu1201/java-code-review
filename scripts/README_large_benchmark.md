@@ -5,7 +5,7 @@
 ## 本機重跑
 
 ```bash
-python skill_validation/run_large_codebase_benchmarks.py --skill-root . --output-dir skill_validation/results/large_codebase_benchmarks --validation-mode auto
+python scripts/run_large_codebase_benchmarks.py --skill-root . --output-dir scripts/results/large_codebase_benchmarks --validation-mode auto
 ```
 
 若要啟用 runtime validation，請設定 `CODEX_RUNTIME_COMMAND`，例如：

@@ -692,7 +692,7 @@ def detect_runtime_command() -> tuple[list[str] | None, str | None]:
 
 def build_runtime_command(template: list[str], prompt: str, skill_root: Path) -> list[str]:
     command: list[str] = []
-    prompt_file = skill_root / "skill_validation" / "runtime_prompt.txt"
+    prompt_file = skill_root / "scripts" / "runtime_prompt.txt"
     prompt_file.write_text(prompt, encoding="utf-8")
     replacements = {
         "{prompt}": prompt,
@@ -1055,7 +1055,7 @@ def validate_skill(args: argparse.Namespace) -> int:
     summary_path = output_dir / "validation_summary.json"
     manifest_path = output_dir / "spec_source_manifest.json"
     catalog_path = output_dir / "requirements_catalog.json"
-    readme_path = skill_root / "skill_validation" / "README.md"
+    readme_path = skill_root / "scripts" / "README.md"
 
     passed_count = sum(1 for result in results if result["passed"])
     failed_count = len(results) - passed_count
