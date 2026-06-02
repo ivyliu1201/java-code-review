@@ -21,6 +21,7 @@ from run_golden_tests import (
     compare_finding,
     detect_must_not_violations,
     detect_runtime_command,
+    execute_runtime_command,
     extract_filenames,
     extract_heading_section,
     extract_rule_ids,
@@ -57,6 +58,8 @@ DIFF_CATALOG_CASE_MAP = {
     "performance-diff-01": ["diff-performance-logging-01"],
     "maintainability-diff-01": ["diff-maintainability-01"],
     "cache-scope-diff-01": ["diff-cache-scope-01"],
+    "test-only-change-diff-01": ["diff-test-only-change-01"],
+    "multi-file-order-diff-01": ["diff-multi-file-order-01"],
 }
 
 
@@ -64,6 +67,12 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Run diff/PR golden tests for java-code-review skill.")
     parser.add_argument("--skill-root", default=".", help="Skill root directory.")
     parser.add_argument("--output-dir", required=True, help="Diff golden test output directory.")
+    parser.add_argument(
+        "--case-id",
+        action="append",
+        default=[],
+        help="Only run the specified golden_case_id. Repeat this flag to run multiple cases.",
+    )
     parser.add_argument(
         "--validation-mode",
         choices=("auto", "runtime", "static"),
@@ -435,6 +444,199 @@ public class SessionCacheService {
                 }
             ],
         },
+        {
+            "golden_case_id": "test-only-change-diff-01",
+            "category": "scope",
+            "source_rules_under_test": ["K-1", "K-2"],
+            "must_not_findings": ["缺少對應測試", "happy path"],
+            "allowed_unchanged_file_mentions": ["RefundService.java"],
+            "allowed_context_files_in_findings": ["RefundService.java"],
+            "base_files": {
+                "src/main/java/com/example/refund/RefundService.java": """package com.example.refund;
+
+import java.math.BigDecimal;
+
+public class RefundService {
+    public RefundDecision evaluate(RefundRequest request, BigDecimal refundableAmount) {
+        if (request.getRefundAmount().compareTo(refundableAmount) > 0) {
+            throw new IllegalStateException("amount exceeds refundable amount");
+        }
+        if (request.getRefundAmount().signum() == 0) {
+            return RefundDecision.rejected("ZERO_AMOUNT");
+        }
+        return RefundDecision.approved();
+    }
+}
+""",
+                "src/test/java/com/example/refund/RefundServiceTest.java": """package com.example.refund;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+
+import java.math.BigDecimal;
+import org.junit.jupiter.api.Test;
+
+class RefundServiceTest {
+    private final RefundService refundService = new RefundService();
+
+    @Test
+    void shouldRejectZeroAmount() {
+        RefundDecision decision = refundService.evaluate(
+                new RefundRequest(new BigDecimal("0.00")),
+                new BigDecimal("100.00"));
+
+        assertEquals("ZERO_AMOUNT", decision.getReason());
+    }
+}
+""",
+            },
+            "changed_files": {
+                "src/test/java/com/example/refund/RefundServiceTest.java": """package com.example.refund;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+
+import java.math.BigDecimal;
+import org.junit.jupiter.api.Test;
+
+class RefundServiceTest {
+    private final RefundService refundService = new RefundService();
+
+    @Test
+    void shouldRejectZeroAmount() {
+        RefundDecision decision = refundService.evaluate(
+                new RefundRequest(new BigDecimal("0.00")),
+                new BigDecimal("100.00"));
+
+        assertEquals("ZERO_AMOUNT", decision.getReason());
+    }
+
+    @Test
+    void shouldThrowWhenRefundAmountExceedsRefundableAmount() {
+        assertThrows(
+                IllegalStateException.class,
+                () -> refundService.evaluate(
+                        new RefundRequest(new BigDecimal("120.00")),
+                        new BigDecimal("100.00")));
+    }
+}
+""",
+            },
+            "expected_findings": [
+                {
+                    "rule_id": "K-2",
+                    "severity": "medium",
+                    "expected_issue": "本次新增測試仍缺少可退額等值邊界案例，測試覆蓋不足以保護退款上限規則。",
+                    "expected_evidence": "assertThrows 120.00 100.00 compareTo(refundableAmount) > 0",
+                    "expected_recommendation": "補等於可退額的通過案例，並確認退款上限邊界語意有被測試保護。",
+                    "expected_filename": "refundservicetest.java",
+                }
+            ],
+        },
+        {
+            "golden_case_id": "multi-file-order-diff-01",
+            "category": "transaction",
+            "source_rules_under_test": ["J-16"],
+            "must_not_findings": ["NullPointerException 風險", "命名規則違反"],
+            "base_files": {
+                "src/main/java/com/example/order/OrderApplicationService.java": """package com.example.order;
+
+import java.util.List;
+import org.springframework.transaction.annotation.Transactional;
+
+public class OrderApplicationService {
+    private final OrderRepository orderRepository;
+    private final OrderItemService orderItemService;
+    private final OrderSummaryRepository orderSummaryRepository;
+
+    public OrderApplicationService(
+            OrderRepository orderRepository,
+            OrderItemService orderItemService,
+            OrderSummaryRepository orderSummaryRepository) {
+        this.orderRepository = orderRepository;
+        this.orderItemService = orderItemService;
+        this.orderSummaryRepository = orderSummaryRepository;
+    }
+
+    @Transactional
+    public void createOrder(CreateOrderRequest request) {
+        Order order = Order.from(request);
+        orderRepository.save(order);
+        orderItemService.saveItems(order.getId(), request.getItems());
+        orderSummaryRepository.save(OrderSummary.created(order.getId(), request.getItems().size()));
+    }
+}
+""",
+                "src/main/java/com/example/order/OrderItemService.java": """package com.example.order;
+
+import java.util.List;
+
+public class OrderItemService {
+    private final OrderItemRepository orderItemRepository;
+
+    public OrderItemService(OrderItemRepository orderItemRepository) {
+        this.orderItemRepository = orderItemRepository;
+    }
+
+    public void saveItems(Long orderId, List<OrderItemRequest> items) {
+        orderItemRepository.saveAll(OrderItem.from(orderId, items));
+    }
+}
+""",
+            },
+            "changed_files": {
+                "src/main/java/com/example/order/OrderApplicationService.java": """package com.example.order;
+
+public class OrderApplicationService {
+    private final OrderRepository orderRepository;
+    private final OrderItemService orderItemService;
+
+    public OrderApplicationService(
+            OrderRepository orderRepository,
+            OrderItemService orderItemService) {
+        this.orderRepository = orderRepository;
+        this.orderItemService = orderItemService;
+    }
+
+    public void createOrder(CreateOrderRequest request) {
+        Order order = Order.from(request);
+        orderRepository.save(order);
+        orderItemService.saveItemsAndSummary(order.getId(), request.getItems());
+    }
+}
+""",
+                "src/main/java/com/example/order/OrderItemService.java": """package com.example.order;
+
+import java.util.List;
+
+public class OrderItemService {
+    private final OrderItemRepository orderItemRepository;
+    private final OrderSummaryRepository orderSummaryRepository;
+
+    public OrderItemService(
+            OrderItemRepository orderItemRepository,
+            OrderSummaryRepository orderSummaryRepository) {
+        this.orderItemRepository = orderItemRepository;
+        this.orderSummaryRepository = orderSummaryRepository;
+    }
+
+    public void saveItemsAndSummary(Long orderId, List<OrderItemRequest> items) {
+        orderItemRepository.saveAll(OrderItem.from(orderId, items));
+        orderSummaryRepository.save(OrderSummary.created(orderId, items.size()));
+    }
+}
+""",
+            },
+            "expected_findings": [
+                {
+                    "rule_id": "J-16",
+                    "severity": "high",
+                    "expected_issue": "Diff 把訂單主檔、明細與彙總資料拆成跨檔案的多表寫入，但沒有明確交易邊界，可能造成資料不一致。",
+                    "expected_evidence": "移除 @Transactional orderRepository.save orderItemRepository.saveAll orderSummaryRepository.save",
+                    "expected_recommendation": "把同一筆訂單的主檔、明細與彙總寫入放回同一個本地交易內，或補上可重試 / 可補償 / 可對帳的一致性設計。",
+                    "expected_filename": "orderapplicationservice.java",
+                }
+            ],
+        },
     ]
 
 
@@ -507,10 +709,19 @@ def build_prompt(case: dict[str, Any], changed_files: list[str], diff_text: str)
     compact_workflow = case.get("workflow_excerpt", "").strip()
     changed_files_text = ", ".join(changed_files)
     rule_ids_text = ", ".join(case.get("source_rules_under_test", []))
+    no_finding_guidance = ""
+    if not case.get("expected_findings"):
+        no_finding_guidance = (
+            "13. 若本次 diff 只修改測試或說明檔，除非變更檔本身引入明顯錯誤，否則不要對未變更的 production code 開 finding。\n"
+            "14. 這種 case 不得提及未變更 production 檔名，也不要把既有測試缺口包裝成本次 diff 的正式問題。\n"
+            "15. 若目前可見範圍沒有可直接確認的問題，`問題清單` 應填 `無`，並把必要的保守說明留在 `開放問題` 或 `剩餘風險`。\n"
+        )
     return (
         "請依照 java-code-review skill 與本地 Java 規則，對這個 Java diff 做正式 code review。\n"
         "這是一個 diff benchmark。你不得要求額外輸入、不得要求擴大審查到未變更檔案、不得先回覆無法 review。\n"
         "你只能根據此 prompt 內提供的規則摘要、模板摘要、workflow 摘要與 git diff 完成 review。\n"
+        "禁止執行任何 shell、git、rg、Get-Content、搜尋、MCP 或其他工具；不要重新讀取 workspace、SKILL.md 或 references 檔案。\n"
+        "本 benchmark 的規則、模板、workflow、變更檔名與 git diff 已完整內嵌；若你打算先掃描 repo 或讀檔，請停止並直接 review。\n"
         "即使你無法讀取 workspace 或 shell，也必須直接完成 review，不可把執行環境問題當成結論。\n"
         "只審查目前 diff 中有變更的 Java 檔案，不得提到未變更檔案名稱。\n"
         f"本次 diff 中有變更的 Java 檔案只有：{changed_files_text}\n"
@@ -523,11 +734,19 @@ def build_prompt(case: dict[str, Any], changed_files: list[str], diff_text: str)
         "5. 以 Compact Review Mode 輸出。\n"
         "6. 正式報告使用固定四段：`問題清單`、`審查範圍`、`開放問題`、`剩餘風險`。\n"
         "7. 第一個 top-level heading 必須是 `問題清單`，不要先寫摘要、前言或總結。\n"
-        "8. `問題清單` 使用中文 Markdown 表格，欄位名稱固定為 `嚴重度 | 標題 | 規則 | 檔案行號 | 影響 | 修正方向`。\n"
-        "9. 不要改用 `Findings`、`問題摘要`、`Open Questions`、`位置`、`問題`、`建議` 等替代 section 名稱或表頭。\n"
-        "10. `審查範圍` 內固定包含兩行：`- 範圍: ...` 與 `- 已審查檔案: ...`。\n"
-        "11. `檔案行號` 使用純文字 `relative/path/File.java:123`，不要輸出 Markdown 連結。\n"
-        "12. `開放問題` 與 `剩餘風險` 不可合併；若沒有內容，請填 `- 無`。\n\n"
+        "8. `問題清單` 使用中文 Markdown 表格，欄位名稱固定為 `嚴重度 | 類型 | 信心 | 標題 | 檔案行號 | 證據 | 影響 | 修正方向`。\n"
+        "8a. 若有明確對應的本地 rule id，請放在 `標題` 開頭，例如 `H-2 敏感資料直接輸出`。\n"
+        "9. `類型` 只使用 `錯誤`、`資安`、`個資`、`交易`、`資料一致性`、`業務邏輯`、`測試缺口`、`可維護性`。\n"
+        "9a. `類型` 每筆 finding 只選一個主類型，不要輸出複合值如 `交易 / 資料一致性`，也不要自創標籤如 `對帳`；若風險本質是對帳、補償或最終一致性，統一歸到 `資料一致性`。\n"
+        "10. `信心` 只使用 `已確認`、`高度可能`、`需確認`；若上下文不足，不可把推測包裝成已確認。\n"
+        "11. `證據` 只引用目前可見 diff 或必要上下文中的具體呼叫、欄位、條件或語句。\n"
+        "12. `修正方向` 保持簡短、具體、可落地；不要提供完整程式碼、patch、教學文或大型重構方案。\n"
+        "12a. 不要使用舊六欄表 `嚴重度 | 規則 | 位置 | 問題 | 風險 | 建議`，也不要改用 `Findings`、`Open Questions`、`Change Summary` 等英文 section。\n"
+        "13. 不要改用 `Findings`、`問題摘要`、`Open Questions`、`位置`、`問題`、`建議` 等替代 section 名稱或表頭。\n"
+        "14. `審查範圍` 內固定包含兩行：`- 範圍: ...` 與 `- 已審查檔案: ...`。\n"
+        "15. `檔案行號` 使用純文字 `relative/path/File.java:123`，不要輸出 Markdown 連結。\n"
+        "16. `開放問題` 與 `剩餘風險` 不可合併；若沒有內容，請填 `- 無`。\n"
+        f"{no_finding_guidance}\n"
         "本地規則摘要：\n"
         f"{rule_excerpt}\n\n"
         "Compact Review Mode workflow 摘要：\n"
@@ -576,16 +795,39 @@ def generate_cases(
     return cases, notes
 
 
-def detect_scope_violations(actual_findings: list[dict[str, Any]], changed_files: list[str]) -> list[dict[str, Any]]:
+def filter_cases_by_id(cases: list[dict[str, Any]], requested_case_ids: list[str]) -> tuple[list[dict[str, Any]], list[str]]:
+    if not requested_case_ids:
+        return cases, []
+
+    requested = {case_id.strip() for case_id in requested_case_ids if case_id.strip()}
+    filtered = [case for case in cases if case["golden_case_id"] in requested]
+    found = {case["golden_case_id"] for case in filtered}
+    missing = sorted(requested - found)
+    notes = [f"指定的 golden case 不存在：{case_id}" for case_id in missing]
+    return filtered, notes
+
+
+def detect_scope_violations(
+    actual_findings: list[dict[str, Any]],
+    changed_files: list[str],
+    allowed_context_files: list[str] | None = None,
+) -> list[dict[str, Any]]:
     changed_files_lower = {name.lower() for name in changed_files}
+    allowed_context_files_lower = {name.lower() for name in (allowed_context_files or [])}
     violations: list[dict[str, Any]] = []
     for actual in actual_findings:
         referenced = extract_filenames(" ".join(actual.get("raw_lines", [])))
+        referenced_changed = sorted(name for name in referenced if name in changed_files_lower)
         off_scope = sorted(name for name in referenced if name not in changed_files_lower)
+        if referenced_changed and off_scope and all(
+            name in allowed_context_files_lower for name in off_scope
+        ):
+            continue
         if off_scope:
             violations.append(
                 {
                     "title": actual.get("title", ""),
+                    "changed_files": referenced_changed,
                     "off_scope_files": off_scope,
                 }
             )
@@ -598,8 +840,6 @@ def detect_unchanged_file_mentions(stdout: str, unchanged_files: list[str]) -> l
 
 
 def evaluate_static_case(case: dict[str, Any], rule_sections: dict[str, str]) -> tuple[bool, str]:
-    if not case["expected_findings"]:
-        return False, "case 缺少 expected_findings。"
     if not case["must_not_findings"]:
         return False, "case 缺少 must_not_findings。"
     if not case["changed_files"]:
@@ -635,30 +875,14 @@ def evaluate_runtime_case(
         command_list.extend(["--output-last-message", str(last_message_path), "--color", "never"])
 
     timeout_seconds = 420
-    try:
-        completed = subprocess.run(
-            command_list,
-            cwd=case_workspace,
-            capture_output=True,
-            text=True,
-            encoding="utf-8",
-            errors="replace",
-            timeout=timeout_seconds,
-            check=False,
-        )
-        stdout_text = completed.stdout
-        if last_message_path.exists():
-            stdout_text = read_text_with_fallback(last_message_path)
-        exit_code = completed.returncode
-        stderr_text = completed.stderr
-        timed_out = False
-    except subprocess.TimeoutExpired as exc:
-        stdout_text = read_text_with_fallback(last_message_path) if last_message_path.exists() else (exc.stdout or "")
-        stderr_text = (exc.stderr or "") + f"\nTimeoutExpired after {timeout_seconds} seconds."
-        exit_code = -1
-        timed_out = True
+    execution = execute_runtime_command(command_list, case_workspace, last_message_path, timeout_seconds)
+    stdout_text = execution["stdout_text"]
+    stderr_text = execution["stderr_text"]
+    exit_code = execution["exit_code"]
+    timed_out = execution["timed_out"]
 
     actual_findings = parse_actual_findings(stdout_text)
+    expects_no_findings = not case["expected_findings"]
     matched_findings = []
     missed_findings = []
     used_actual_indexes: set[int] = set()
@@ -722,14 +946,31 @@ def evaluate_runtime_case(
     must_not_violations = detect_must_not_violations(actual_findings, case["must_not_findings"])
     template_compliance = is_template_compliant(stdout_text)
     workflow_compliance = is_workflow_compliant(stdout_text)
-    scope_violations = detect_scope_violations(actual_findings, changed_files)
+    scope_violations = detect_scope_violations(
+        actual_findings,
+        changed_files,
+        case.get("allowed_context_files_in_findings", []),
+    )
     unchanged_file_mentions = detect_unchanged_file_mentions(stdout_text, unchanged_files)
+    allowed_unchanged_mentions = {
+        name.lower() for name in case.get("allowed_unchanged_file_mentions", [])
+    }
+    if allowed_unchanged_mentions:
+        unchanged_file_mentions = [
+            name for name in unchanged_file_mentions if name.lower() not in allowed_unchanged_mentions
+        ]
+    timeout_recovered = False
+    if timed_out and actual_findings and template_compliance and workflow_compliance:
+        timed_out = False
+        exit_code = 0
+        timeout_recovered = True
     precision = 0.0 if not actual_findings else len(matched_findings) / len(actual_findings)
-    recall = 0.0 if not case["expected_findings"] else len(matched_findings) / len(case["expected_findings"])
+    recall = 1.0 if expects_no_findings else len(matched_findings) / len(case["expected_findings"])
     quality_pass = (
         exit_code == 0
         and not missed_findings
         and not must_not_violations
+        and (not expects_no_findings or not actual_findings)
     )
     scope_pass = not scope_violations and not unchanged_file_mentions
     format_pass = template_compliance and workflow_compliance
@@ -737,6 +978,10 @@ def evaluate_runtime_case(
 
     if timed_out:
         reason = f"runtime mode 執行逾時，case 已記錄為失敗；timeout={timeout_seconds}s。"
+    elif timeout_recovered:
+        reason = "runtime mode 已輸出完整最終報告；雖然原行程逾時，但已根據 last-message 成功恢復結果。"
+    elif expects_no_findings and actual_findings:
+        reason = "runtime mode 本 case 預期零 findings，但實際輸出了 review finding。"
     elif not actual_findings:
         reason = "runtime mode 已執行，但沒有解析到 actual findings；precision 不代表真實準確度。"
     elif overall_pass:
@@ -767,11 +1012,15 @@ def evaluate_runtime_case(
         "overall_pass": overall_pass,
         "precision_estimate": round(precision, 4),
         "recall_estimate": round(recall, 4),
-        "command": subprocess.list2cmdline(command_list),
+        "command": subprocess.list2cmdline(execution["final_command_list"]),
         "working_directory": str(case_workspace),
         "exit_code": exit_code,
         "stdout": stdout_text,
         "stderr": stderr_text,
+        "runtime_attempt_count": execution["attempt_count"],
+        "retried_on_spawn_setup": execution["retried_on_spawn_setup"],
+        "used_spawn_safe_retry": execution["used_spawn_safe_retry"],
+        "timeout_recovered": timeout_recovered,
         "passed": overall_pass,
         "reason": reason,
     }
@@ -779,6 +1028,8 @@ def evaluate_runtime_case(
 
 def gate_b_status(cases: list[dict[str, Any]], rule_sections: dict[str, str]) -> tuple[str, list[str]]:
     issues: list[str] = []
+    if not cases:
+        return "fail", ["diff golden cases 為空。"]
     categories = {case["category"] for case in cases}
     required_categories = {"security", "null_safety", "performance", "maintainability", "transaction"}
     if len(cases) < 5:
@@ -791,8 +1042,6 @@ def gate_b_status(cases: list[dict[str, Any]], rule_sections: dict[str, str]) ->
             issues.append(f"{case['golden_case_id']} 沒有 base_files。")
         if not case["changed_files"]:
             issues.append(f"{case['golden_case_id']} 沒有 changed_files。")
-        if not case["expected_findings"]:
-            issues.append(f"{case['golden_case_id']} 沒有 expected finding。")
         if not case["must_not_findings"]:
             issues.append(f"{case['golden_case_id']} 沒有 must_not finding。")
         for expected in case["expected_findings"]:
@@ -808,6 +1057,28 @@ def gate_b_status(cases: list[dict[str, Any]], rule_sections: dict[str, str]) ->
             if expected["rule_id"] not in rule_sections:
                 issues.append(f"{case['golden_case_id']} 的 rule_id {expected['rule_id']} 無法對應 java-rules.md。")
     return ("fail" if issues else "pass"), issues
+
+
+def write_progress_snapshot(
+    output_dir: Path,
+    results: list[dict[str, Any]],
+    total_cases: int,
+    validation_mode: str,
+) -> None:
+    progress_path = output_dir / "golden_progress.json"
+    golden_results_path = output_dir / "golden_results.jsonl"
+    write_jsonl(golden_results_path, results)
+    write_json(
+        progress_path,
+        {
+            "validation_mode": validation_mode,
+            "completed_cases": len(results),
+            "total_cases": total_cases,
+            "completed_case_ids": [result["golden_case_id"] for result in results],
+            "passed_case_ids": [result["golden_case_id"] for result in results if result.get("passed")],
+            "failed_case_ids": [result["golden_case_id"] for result in results if not result.get("passed")],
+        },
+    )
 
 
 def run(args: argparse.Namespace) -> int:
@@ -829,6 +1100,8 @@ def run(args: argparse.Namespace) -> int:
     rule_sections = parse_rule_sections(java_rules_text) if java_rules_text else {}
     cases, case_notes = generate_cases(skill_root, diff_cases_dir, rule_sections, source_texts, benchmark_case_index)
     case_notes.extend(annotate_cases_with_catalog(cases, benchmark_case_index, DIFF_CATALOG_CASE_MAP))
+    cases, filtered_case_notes = filter_cases_by_id(cases, args.case_id)
+    case_notes.extend(filtered_case_notes)
 
     validation_mode = "static_validation_only"
     runtime_template: list[str] | None = None
@@ -849,6 +1122,7 @@ def run(args: argparse.Namespace) -> int:
         runtime_notes.append("validation-mode=static，僅執行 static validation。")
 
     results: list[dict[str, Any]] = []
+    total_cases = len(cases)
     for case in cases:
         case_workspace = case_workspaces_dir / case["golden_case_id"]
         changed_files, unchanged_files, diff_text = prepare_git_case_repo(case_workspace, case)
@@ -913,6 +1187,7 @@ def run(args: argparse.Namespace) -> int:
                 "reason": reason,
             }
         results.append(result)
+        write_progress_snapshot(output_dir, results, total_cases, validation_mode)
 
     golden_results_path = output_dir / "golden_results.jsonl"
     summary_path = output_dir / "golden_summary.json"

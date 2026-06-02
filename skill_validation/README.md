@@ -18,6 +18,7 @@
 skill_validation/
 ├─ BENCHMARK_DESIGN.md
 ├─ benchmark_catalog.json
+├─ STATUS_REPORT_2026-05-26.md
 ├─ README.md
 ├─ validate_skill.py
 ├─ run_golden_tests.py
@@ -26,6 +27,7 @@ skill_validation/
 ├─ README_golden.md
 ├─ README_diff_golden.md
 ├─ README_large_benchmark.md
+├─ demo_small_project/
 └─ results/
    ├─ spec_validation/
    ├─ golden_tests/
@@ -72,6 +74,13 @@ python skill_validation/validate_skill.py --skill-root C:\path\to\skill --output
 ```text
 set CODEX_RUNTIME_COMMAND=codex exec --prompt-file {prompt_file}
 ```
+
+runtime benchmark 額外會保留重試與恢復資訊，例如：
+
+- `runtime_attempt_count`
+- `retried_on_spawn_setup`
+- `used_spawn_safe_retry`
+- `timeout_recovered`
 
 ## Gate A 到 Gate E 判斷邏輯
 
@@ -160,8 +169,8 @@ benchmark 結果建議拆成三組訊號，不要只看單一總 pass：
 
 - `single-file baseline`：`security-01`、`null-safety-01`、`transaction-01`、`performance-01`、`maintainability-01`
 - `single-file holdout`：`security-holdout-01`、`null-safety-holdout-01`、`transaction-holdout-01`、`performance-holdout-01`、`maintainability-holdout-01`
-- `single-file holdout` 延伸案例：`state-transition-holdout-01`、`time-boundary-holdout-01`
-- `diff / PR`：`security-diff-01`、`null-safety-diff-01`、`transaction-diff-01`、`performance-diff-01`、`maintainability-diff-01`、`cache-scope-diff-01`
+- `single-file holdout` 延伸案例：`state-transition-holdout-01`、`time-boundary-holdout-01`、`exception-swallow-holdout-01`、`hashmap-query-holdout-01`
+- `diff / PR`：`security-diff-01`、`null-safety-diff-01`、`transaction-diff-01`、`performance-diff-01`、`maintainability-diff-01`、`cache-scope-diff-01`、`test-only-change-diff-01`、`multi-file-order-diff-01`
 - `large-codebase`：`large-codebase-01`
 
 仍保留少數「只有 catalog 設計、尚未提供 fixture」的概念案例，例如 `lg-cross-module-risk-01`、`lg-exclusion-discipline-01`。這些案例不會影響目前可執行腳本，但要等真正補 fixture 後才會進入 runnable benchmark。

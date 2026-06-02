@@ -8,6 +8,12 @@
 python skill_validation/run_diff_golden_tests.py --skill-root . --output-dir skill_validation/results/diff_golden_tests --validation-mode auto
 ```
 
+若只想重跑特定 diff case，可重複帶入 `--case-id`：
+
+```bash
+python skill_validation/run_diff_golden_tests.py --skill-root . --output-dir skill_validation/results/diff_golden_tests --validation-mode auto --case-id test-only-change-diff-01 --case-id multi-file-order-diff-01
+```
+
 若要啟用 runtime validation，請設定 `CODEX_RUNTIME_COMMAND`，例如：
 
 ```text
@@ -20,12 +26,19 @@ set CODEX_RUNTIME_COMMAND=codex.cmd exec -C {skill_root} --skip-git-repo-check -
 
 1. 建立一個最小 git repo
 2. commit base snapshot
-3. 只修改一個 Java 檔案，留下未提交 diff
+3. 依案例需要修改一個或多個 changed Java files，留下未提交 diff
 4. 放入至少一個未變更的 distractor Java 檔案
 5. 驗證 runtime output 是否：
    - 命中 diff 內應抓的問題
    - 不評論未變更檔案
    - 仍保有正式中文 review 的可讀性，且 `問題清單` 優先使用表格
+
+目前 diff case 除了一般單檔變更，還包含：
+
+- `test-only-change-diff-01`
+  - 驗證只改測試時，不要編造 production finding。
+- `multi-file-order-diff-01`
+  - 驗證跨兩個 changed files 的一致性風險是否能被合併判讀。
 
 ## 額外驗證欄位
 
