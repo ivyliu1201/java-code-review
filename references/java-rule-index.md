@@ -24,6 +24,11 @@
 - `K`: Tests & Review Coverage。核心邏輯測試、異常與邊界、外部系統測試。
 - `L`: Spring / Framework / Transaction Usage。交易邊界、Controller、DTO/Entity、singleton 狀態、自動綁定。
 - `M`: Cache & Distributed Safety。cache key、一致性、分散式鎖、敏感資料。
+- `N`: API Contract & Error Boundary。OpenAPI、API 註解、統一錯誤回應、交易結果不明處理。
+- `O`: Documentation & Comments。Javadoc 與必要的原因註解。
+- `P`: Observability。MDC、metrics、trace 與非同步日誌設定。
+- `Q`: Service Orchestration。編排責任邊界、跨服務一致性與長流程狀態。
+- `R`: Batch Processing。批次隔離、觸發與控制、參數、可恢復執行與大量資料處理。
 
 ## 常用 grep 關鍵字
 
@@ -39,3 +44,8 @@
 - 測試覆蓋：`K-1|K-2|K-3|K-4`
 - Spring 交易與邊界：`L-1|L-2|L-3|L-4|L-5`
 - Cache / 分散式安全：`M-1|M-2|M-3|M-4`
+- API 契約與錯誤邊界：`N-1|N-2|N-3|N-4|N-5`
+- 註解：`O-1|O-2`
+- 可觀測性：`P-1|P-2|P-3|P-4`
+- 服務編排：`Q-1|Q-2|Q-3`
+- 批次：`R-1|R-2|R-3|R-4|R-5`

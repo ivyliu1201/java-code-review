@@ -356,6 +356,173 @@
               }
             ]
           }
+        },
+        {
+          "case_id": "sf-api-error-boundary-01",
+          "rules_under_test": ["E-2", "J-6"],
+          "primary_signal": "quality",
+          "scenario": "A REST payment endpoint exposes technical errors, has no stable error code, and retries an unknown external write without a transaction record.",
+          "expected_findings": ["unstable API error response", "unknown transaction outcome retried without idempotency"],
+          "must_not_findings": ["missing OpenAPI document without visible contract context"],
+          "fixture": {
+            "golden_case_id": "api-error-boundary-01",
+            "category": "api_contract",
+            "java_file": "PaymentController.java",
+            "java_source": "package com.example.payment;\n\nimport org.springframework.web.bind.annotation.PostMapping;\nimport org.springframework.web.bind.annotation.RequestBody;\nimport org.springframework.web.bind.annotation.RestController;\n\n@RestController\npublic class PaymentController {\n    private final PaymentClient paymentClient;\n\n    public PaymentController(PaymentClient paymentClient) {\n        this.paymentClient = paymentClient;\n    }\n\n    @PostMapping(\"/payments\")\n    public String pay(@RequestBody PaymentRequest request) {\n        try {\n            paymentClient.charge(request.getOrderId(), request.getAmount());\n            return \"OK\";\n        } catch (Exception exception) {\n            paymentClient.charge(request.getOrderId(), request.getAmount());\n            return exception.getMessage();\n        }\n    }\n}\n",
+            "must_not_findings": ["命名規則違反", "缺少 OpenAPI 文件"],
+            "source_rules_under_test": ["E-2", "J-6"],
+            "expected_findings": [
+              {
+                "rule_id": "E-2",
+                "severity": "high",
+                "expected_issue": "Controller 直接回傳 exception.getMessage()，錯誤回應沒有穩定 code，且可能洩漏內部技術資訊。",
+                "expected_evidence": "catch (Exception exception) return exception.getMessage()",
+                "expected_recommendation": "改由集中例外處理回傳至少含 code 與面向使用者 message 的穩定錯誤 JSON，內部例外只保留在日誌。"
+              },
+              {
+                "rule_id": "J-6",
+                "severity": "high",
+                "expected_issue": "外部扣款失敗後直接重送，沒有 requestId、交易狀態或查詢機制，可能造成重複扣款。",
+                "expected_evidence": "paymentClient.charge catch 再次 paymentClient.charge",
+                "expected_recommendation": "保存交易與冪等識別，先查證外部結果；只對明確暫時性失敗採有上限的重試。"
+              }
+            ]
+          }
+        },
+        {
+          "case_id": "sf-documentation-comments-01",
+          "rules_under_test": ["O-1", "O-2"],
+          "primary_signal": "quality",
+          "scenario": "A public settlement API has non-obvious compensation behavior but no Javadoc, while a comment only repeats the method call.",
+          "expected_findings": ["missing contract documentation", "redundant comment"],
+          "must_not_findings": ["Javadoc required for every private helper"],
+          "fixture": {
+            "golden_case_id": "documentation-comments-01",
+            "category": "maintainability",
+            "java_file": "SettlementService.java",
+            "java_source": "package com.example.settlement;\n\npublic class SettlementService {\n    // Call reverse when settlement fails.\n    public SettlementResult settle(SettlementRequest request) {\n        SettlementResult result = paymentGateway.settle(request);\n        if (!result.isSuccess()) {\n            paymentGateway.reverse(request.getOriginalTransactionId());\n        }\n        return result;\n    }\n}\n",
+            "must_not_findings": ["命名規則違反"],
+            "source_rules_under_test": ["O-1", "O-2"],
+            "expected_findings": [
+              {
+                "rule_id": "O-1",
+                "severity": "medium",
+                "expected_issue": "公開結算方法包含非直覺的沖正副作用，卻沒有說明前置條件、結果與限制的 Javadoc。",
+                "expected_evidence": "public SettlementResult settle paymentGateway.reverse",
+                "expected_recommendation": "為公開契約補上 Javadoc，說明何時觸發沖正、可觀察結果與呼叫端限制。"
+              },
+              {
+                "rule_id": "O-2",
+                "severity": "medium",
+                "expected_issue": "註解只重述 reverse 呼叫，沒有說明沖正的業務原因或一致性取捨。",
+                "expected_evidence": "// Call reverse when settlement fails.",
+                "expected_recommendation": "改為說明為何必須沖正及其與原交易的關係，或移除沒有額外資訊的註解。"
+              }
+            ]
+          }
+        },
+        {
+          "case_id": "sf-observability-context-01",
+          "rules_under_test": ["P-1", "P-2", "P-3"],
+          "primary_signal": "quality",
+          "scenario": "A request filter leaks MDC state and records user-specific labels in a counter while an OpenTelemetry-enabled service logs no trace correlation.",
+          "expected_findings": ["MDC cleanup missing", "high-cardinality metric label"],
+          "must_not_findings": ["require async logging without configuration evidence"],
+          "fixture": {
+            "golden_case_id": "observability-context-01",
+            "category": "observability",
+            "java_file": "PaymentRequestFilter.java",
+            "java_source": "package com.example.payment;\n\nimport io.micrometer.core.instrument.MeterRegistry;\nimport org.slf4j.MDC;\n\npublic class PaymentRequestFilter {\n    private final MeterRegistry meterRegistry;\n\n    public PaymentRequestFilter(MeterRegistry meterRegistry) {\n        this.meterRegistry = meterRegistry;\n    }\n\n    public void handle(Request request) {\n        MDC.put(\"requestId\", request.getRequestId());\n        meterRegistry.counter(\"payment.request\", \"userId\", request.getUserId()).increment();\n        process(request);\n    }\n}\n",
+            "must_not_findings": ["命名規則違反", "缺少非同步日誌"],
+            "source_rules_under_test": ["P-1", "P-2"],
+            "expected_findings": [
+              {
+                "rule_id": "P-1",
+                "severity": "medium",
+                "expected_issue": "MDC 設定 requestId 後沒有在 finally 清理，執行緒重用時可能污染下一個請求。",
+                "expected_evidence": "MDC.put(\"requestId\", request.getRequestId())",
+                "expected_recommendation": "以 try/finally 包住請求處理並在 finally 呼叫 MDC.clear() 或清除本次欄位。"
+              },
+              {
+                "rule_id": "P-2",
+                "severity": "medium",
+                "expected_issue": "metrics tag 使用 userId，會產生高基數並可能揭露使用者識別資訊。",
+                "expected_evidence": "counter(\"payment.request\", \"userId\", request.getUserId())",
+                "expected_recommendation": "改用有限值域的交易狀態或錯誤碼，不要把 userId 放入 metric label。"
+              }
+            ]
+          }
+        },
+        {
+          "case_id": "sf-orchestration-recovery-01",
+          "rules_under_test": ["Q-2", "Q-3"],
+          "primary_signal": "quality",
+          "scenario": "A cross-service order workflow performs irreversible calls synchronously and keeps its pending state only in memory.",
+          "expected_findings": ["missing cross-service recovery design", "long-running state not persisted"],
+          "must_not_findings": ["require a particular workflow engine"],
+          "fixture": {
+            "golden_case_id": "orchestration-recovery-01",
+            "category": "orchestration",
+            "java_file": "OrderFulfillmentOrchestrator.java",
+            "java_source": "package com.example.order;\n\npublic class OrderFulfillmentOrchestrator {\n    private String pendingOrderId;\n\n    public void fulfill(OrderRequest request) {\n        pendingOrderId = request.getOrderId();\n        paymentClient.capture(request.getOrderId(), request.getAmount());\n        inventoryClient.reserve(request.getOrderId(), request.getItems());\n        shippingClient.createShipment(request.getOrderId());\n        pendingOrderId = null;\n    }\n}\n",
+            "must_not_findings": ["未使用特定 workflow engine"],
+            "source_rules_under_test": ["Q-2", "Q-3"],
+            "expected_findings": [
+              {
+                "rule_id": "Q-2",
+                "severity": "high",
+                "expected_issue": "跨服務扣款、保留庫存與建立物流沒有持久化狀態、補償或對帳設計，部分失敗時無法收斂。",
+                "expected_evidence": "paymentClient.capture inventoryClient.reserve shippingClient.createShipment",
+                "expected_recommendation": "定義持久化流程狀態、冪等鍵、補償／對帳與人工處置方式，不要只依賴同步呼叫順序。"
+              },
+              {
+                "rule_id": "Q-3",
+                "severity": "medium",
+                "expected_issue": "處理中訂單只放在 singleton 欄位 pendingOrderId，服務重啟或等待外部結果後無法恢復。",
+                "expected_evidence": "private String pendingOrderId",
+                "expected_recommendation": "將長流程狀態、逾時與重試資訊持久化；是否採 workflow engine 依既有平台決定。"
+              }
+            ]
+          }
+        },
+        {
+          "case_id": "sf-batch-recovery-01",
+          "rules_under_test": ["R-3", "R-4", "R-5"],
+          "primary_signal": "quality",
+          "scenario": "A batch job accepts an unchecked file path, loads all rows into memory, and repeats payment side effects when rerun.",
+          "expected_findings": ["unsafe batch parameters", "unbounded data processing", "rerun duplicate side effects"],
+          "must_not_findings": ["Spring Batch is mandatory"],
+          "fixture": {
+            "golden_case_id": "batch-recovery-01",
+            "category": "batch",
+            "java_file": "PaymentImportJob.java",
+            "java_source": "package com.example.batch;\n\nimport java.util.List;\n\npublic class PaymentImportJob {\n    public void run(String filePath) {\n        List<PaymentRecord> records = csvReader.readAll(filePath);\n        for (PaymentRecord record : records) {\n            paymentClient.charge(record.getOrderId(), record.getAmount());\n        }\n    }\n}\n",
+            "must_not_findings": ["未使用 Spring Batch", "命名規則違反"],
+            "source_rules_under_test": ["R-3", "R-4", "R-5"],
+            "expected_findings": [
+              {
+                "rule_id": "R-3",
+                "severity": "medium",
+                "expected_issue": "filePath 沒有格式或允許範圍驗證，也沒有可追溯的 job execution 資訊。",
+                "expected_evidence": "run(String filePath) csvReader.readAll(filePath)",
+                "expected_recommendation": "驗證並記錄 job parameters，建立可關聯的 execution ID，且避免把敏感參數寫入日誌。"
+              },
+              {
+                "rule_id": "R-4",
+                "severity": "medium",
+                "expected_issue": "一次 readAll 後逐筆呼叫外部系統，沒有 chunk、checkpoint 或受控 I/O 策略。",
+                "expected_evidence": "List<PaymentRecord> records = csvReader.readAll(filePath)",
+                "expected_recommendation": "依資料量採 chunk 或其他受控處理方式，避免無界載入與長時間無 checkpoint 的工作。"
+              },
+              {
+                "rule_id": "R-5",
+                "severity": "high",
+                "expected_issue": "批次重跑會再次扣款，程式看不到冪等鍵、執行狀態或安全恢復設計。",
+                "expected_evidence": "for (PaymentRecord record : records) paymentClient.charge",
+                "expected_recommendation": "以交易／批次識別建立冪等與執行狀態，區分可重試、可跳過與需人工處理的錯誤。"
+              }
+            ]
+          }
         }
       ]
     },
